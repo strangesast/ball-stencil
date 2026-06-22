@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" viewBox="0 0 300 300" width="300" height="300">
+  <path inkscape:label="a" fill="#000" d="M 90,150 A 20,20 0 1 0 130,150 A 20,20 0 1 0 90,150 Z"/>
+  <path inkscape:label="b" fill="#000" d="M 170,150 A 20,20 0 1 0 210,150 A 20,20 0 1 0 170,150 Z"/>
+  <path inkscape:label="c" fill="#000" d="M 130,90 A 20,20 0 1 0 170,90 A 20,20 0 1 0 130,90 Z"/>
+  <path inkscape:label="d" fill="#000" d="M 130,210 A 20,20 0 1 0 170,210 A 20,20 0 1 0 130,210 Z"/>
+</svg>

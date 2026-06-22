@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ball-stencil — SVG → draw-through sphere stencil</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>ball&#8209;stencil</h1>
+      <span class="sub">Filled SVG → watertight draw&#8209;through hemispherical stencil shell. Everything runs in your browser.</span>
+    </header>
+
+    <main>
+      <aside id="panel">
+        <section class="card">
+          <h2>Artwork</h2>
+          <div id="drop" class="drop">
+            <input type="file" id="file" accept=".svg,image/svg+xml" hidden />
+            <button id="pick" class="primary">Choose SVG…</button>
+            <span class="hint">or drag &amp; drop an SVG</span>
+            <div id="svginfo" class="svginfo"></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><h2>Parameters</h2><button id="reset" class="link">reset defaults</button></div>
+          <div id="params"></div>
+        </section>
+      </aside>
+
+      <section id="stage">
+        <canvas id="gl"></canvas>
+        <div id="overlay" class="overlay"></div>
+        <div class="viewbar">
+          <label><input type="checkbox" id="t-ball" checked /> ball</label>
+          <label><input type="checkbox" id="t-wire" /> wireframe</label>
+          <label><input type="checkbox" id="t-spin" checked /> auto&#8209;rotate</label>
+        </div>
+      </section>
+
+      <aside id="report">
+        <section class="card">
+          <div class="card-head"><h2>Report</h2><span id="badge" class="badge">—</span></div>
+          <div id="report-body" class="report-body">Load an SVG to build a stencil.</div>
+        </section>
+        <section class="card">
+          <h2>Download</h2>
+          <div class="downloads">
+            <button id="dl-stl" disabled>Stencil STL</button>
+            <button id="dl-obj" disabled>Stencil OBJ</button>
+            <button id="dl-ball" disabled>Reference ball STL</button>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
