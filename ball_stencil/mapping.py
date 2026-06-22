@@ -73,6 +73,15 @@ class Mapper:
         phi = 2.0 * np.arcsin(u)
         return radius * np.sin(phi) / rho
 
+    def areal_scale(self, rho: float, radius: float) -> float:
+        """Surface area (mm^2) per unit planar area at planar radius ``rho``.
+
+        The product of the radial and tangential scales is the Jacobian of the
+        plane->sphere map, so it gives a *local* area factor rather than the
+        single mid-cap constant ``scale_mid**2``.
+        """
+        return self.radial_scale(rho, radius) * self.tangential_scale(rho, radius)
+
     def scale_bounds(self, radius: float) -> tuple[float, float, float]:
         """Return (min, mid, max) surface scale across the cap, for sizing."""
         samples = np.linspace(0.0, self.r_ref, 64)
@@ -86,9 +95,15 @@ class Mapper:
 
 
 def build_mapper(center, r_ref: float, cap_angle_rad: float, flip_v: bool) -> Mapper:
+    r_ref = float(r_ref)
+    if not r_ref > 0.0:
+        raise ValueError(
+            f"design reference radius must be > 0 (got {r_ref}); the artwork may "
+            "have collapsed to a single point or an empty region"
+        )
     return Mapper(
         center=np.asarray(center, dtype=np.float64),
-        r_ref=float(r_ref),
+        r_ref=r_ref,
         cap_angle_rad=float(cap_angle_rad),
         flip_v=bool(flip_v),
     )

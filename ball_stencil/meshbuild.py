@@ -10,7 +10,7 @@ Pipeline:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from math import sqrt
 
 import numpy as np
@@ -111,6 +111,11 @@ def build_shell(
     if cfg.snap_grid_svg > 0:
         material = shapely.make_valid(shapely.set_precision(material, cfg.snap_grid_svg))
     material = _drop_tiny(material, cfg, center, r_ref)
+    if material.is_empty:
+        raise ValueError(
+            "material region is empty after cutting the artwork from the disc "
+            "(check the SVG, design margin, or cut separation); nothing to build"
+        )
 
     mapper = build_mapper(center, r_ref, cfg.cap_angle_rad, cfg.flip_v)
     _, scale_mid, _ = mapper.scale_bounds(cfg.outer_radius_mm)
@@ -190,6 +195,7 @@ def build_shell(
     faces_arr = np.asarray(faces, dtype=np.int64)
     mesh = Mesh(vertices=vertices, faces=faces_arr, n_planar=n)
     _orient_outward(mesh)
+    _assert_manifold(mesh.faces)
 
     islands = _component_areas(material, mapper, cfg)
     n_cut = _count_holes(material)
@@ -269,16 +275,86 @@ def _split_pinch_vertices(tris, planar):
     return [tuple(t) for t in tris], planar
 
 
+def _connected_components(faces: np.ndarray, n_vertices: int) -> np.ndarray:
+    """Label each face by its connected component (faces sharing a vertex)."""
+    parent = np.arange(n_vertices)
+
+    def find(x: int) -> int:
+        root = x
+        while parent[root] != root:
+            root = parent[root]
+        while parent[x] != root:
+            parent[x], x = root, parent[x]
+        return root
+
+    for tri in faces:
+        r0 = find(int(tri[0]))
+        for w in tri[1:]:
+            rw = find(int(w))
+            if rw != r0:
+                parent[rw] = r0
+    return np.array([find(int(i)) for i in faces[:, 0]])
+
+
 def _orient_outward(mesh: Mesh) -> None:
-    """Flip all faces if the net signed volume is negative (normals inward)."""
+    """Flip each connected component whose faces wind net-inward.
+
+    A shell with through-holes plus detached material islands is several
+    disjoint closed surfaces.  A single global signed-volume test can leave a
+    minority island inverted (its sign ridden over by the dominant shell), so
+    orientation is decided per component.
+    """
     v = mesh.vertices
     f = mesh.faces
-    a = v[f[:, 0]]
-    b = v[f[:, 1]]
-    c = v[f[:, 2]]
-    vol = np.sum(a * np.cross(b, c)) / 6.0
-    if vol < 0.0:
-        mesh.faces = f[:, [0, 2, 1]].copy()
+    if len(f) == 0:
+        return
+    a, b, c = v[f[:, 0]], v[f[:, 1]], v[f[:, 2]]
+    tri_vol6 = np.einsum("ij,ij->i", a, np.cross(b, c))  # 6x signed volume per face
+    comp = _connected_components(f, len(v))
+    flip = np.zeros(len(f), dtype=bool)
+    for cid in np.unique(comp):
+        sel = comp == cid
+        if tri_vol6[sel].sum() < 0.0:
+            flip[sel] = True
+    if flip.any():
+        new = f.copy()
+        new[flip] = new[flip][:, [0, 2, 1]]
+        mesh.faces = new
+
+
+def _assert_manifold(faces: np.ndarray) -> None:
+    """Raise if the assembled shell has an edge shared by more than two faces.
+
+    This happens when a cut hole touches the rim (or another hole) at a single
+    vertex that survives pinch-splitting as one fan: the side walls then meet
+    non-manifold there.  Fail loudly with the remedy instead of writing an
+    unprintable stencil.
+    """
+    if len(faces) == 0:
+        return
+    directed = np.vstack([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]])
+    undirected = np.sort(directed, axis=1)
+    _, counts = np.unique(undirected, axis=0, return_counts=True)
+    n_bad = int(np.sum(counts > 2))
+    if n_bad:
+        raise ValueError(
+            f"assembled shell has {n_bad} non-manifold edge(s); a cut hole "
+            "likely touches the rim or another hole at a point. Increase "
+            "cut_separation_svg (--... wider separation) to pull them apart."
+        )
+
+
+def _sphere_area(part, mapper: Mapper, cfg) -> float:
+    """Approximate on-sphere area (mm^2) of a planar component.
+
+    The Lambert areal scale grows toward the rim (~1/(1-u^2)), so evaluate it
+    at the component's own centroid radius rather than a single mid-cap
+    constant -- otherwise a real rim island is under-measured and dropped (and
+    a near-pole speck over-measured and kept).
+    """
+    c = part.centroid
+    rho = float(np.hypot(c.x - mapper.center[0], c.y - mapper.center[1]))
+    return float(part.area * mapper.areal_scale(rho, cfg.outer_radius_mm))
 
 
 def _drop_tiny(material, cfg, center, r_ref):
@@ -286,17 +362,21 @@ def _drop_tiny(material, cfg, center, r_ref):
         return material
     parts = list(shapely.get_parts(material))
     mapper = build_mapper(center, r_ref, cfg.cap_angle_rad, cfg.flip_v)
-    _, scale_mid, _ = mapper.scale_bounds(cfg.outer_radius_mm)
-    keep = [p for p in parts if p.area * scale_mid * scale_mid >= cfg.min_island_area_mm2]
+    keep = [p for p in parts if _sphere_area(p, mapper, cfg) >= cfg.min_island_area_mm2]
+    if not keep:
+        raise ValueError(
+            "every material component is below min_island_area_mm2 "
+            f"({cfg.min_island_area_mm2} mm^2); nothing left to build -- lower "
+            "--min-island or check the artwork scale"
+        )
     if len(keep) == len(parts):
         return material
     return shapely.union_all(keep)
 
 
 def _component_areas(material, mapper, cfg) -> list[float]:
-    _, scale_mid, _ = mapper.scale_bounds(cfg.outer_radius_mm)
     return sorted(
-        (float(p.area * scale_mid * scale_mid) for p in shapely.get_parts(material)),
+        (_sphere_area(p, mapper, cfg) for p in shapely.get_parts(material)),
         reverse=True,
     )
 

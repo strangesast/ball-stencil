@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -34,7 +34,11 @@ def _provisional_scale_max(region, center, cfg) -> float:
 
 
 def run(cfg: Config | None = None, *, verbose: bool = True) -> PipelineResult:
-    cfg = cfg or Config()
+    # Work on our own copy: run() locks design_reference_radius/centre when
+    # --match is used, and that must not leak back onto the caller's Config
+    # (which would silently override a later, different design's own extent).
+    cfg = replace(cfg) if cfg is not None else Config()
+    cfg.validate()
     log = print if verbose else (lambda *a, **k: None)
 
     # --- 1. load + tessellate (two passes to honour the chord-error budget) --

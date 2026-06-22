@@ -7,7 +7,7 @@ in millimetres and all computation downstream is float64.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from math import radians
 
 import numpy as np
@@ -137,3 +137,32 @@ class Config:
     @property
     def cap_angle_rad(self) -> float:
         return radians(self.cap_angle_deg)
+
+    def validate(self) -> None:
+        """Reject physically/numerically invalid parameters.
+
+        Called by the pipeline *after* CLI and ``--match`` overrides are
+        applied, so values mutated after construction are still checked.
+        Catches the divisions-by-zero and singular mappings that otherwise
+        surface deep in the geometry as a hang or silent garbage mesh.
+        """
+        if not self.sphere_diameter_mm > 0:
+            raise ValueError(f"sphere_diameter_mm must be > 0, got {self.sphere_diameter_mm}")
+        if self.fit_clearance_mm < 0:
+            raise ValueError(f"fit_clearance_mm must be >= 0, got {self.fit_clearance_mm}")
+        if not self.wall_thickness_mm > 0:
+            raise ValueError(f"wall_thickness_mm must be > 0, got {self.wall_thickness_mm}")
+        # 0 deg -> scales collapse to 0 -> spacing = edge/0 = inf (grid blowup);
+        # 180 deg -> Lambert is singular at the rim.
+        if not 0.0 < self.cap_angle_deg < 180.0:
+            raise ValueError(f"cap_angle_deg must be in (0, 180), got {self.cap_angle_deg}")
+        if not self.design_margin > 0:
+            raise ValueError(f"design_margin must be > 0, got {self.design_margin}")
+        if self.design_reference_radius is not None and not self.design_reference_radius > 0:
+            raise ValueError(
+                f"design_reference_radius must be > 0, got {self.design_reference_radius}"
+            )
+        if not self.target_edge_mm > 0:
+            raise ValueError(f"target_edge_mm must be > 0, got {self.target_edge_mm}")
+        if not self.chord_error_mm > 0:
+            raise ValueError(f"chord_error_mm must be > 0, got {self.chord_error_mm}")

@@ -10,6 +10,7 @@ This region is what becomes the *holes* in the stencil shell.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 import numpy as np
@@ -28,14 +29,28 @@ class Artwork:
     labels: list[str]              # path labels, for reference
 
 
+_LEN_RE = re.compile(r"[-+]?[0-9]*\.?[0-9]+")
+
+
+def _parse_length(value, default: float = 0.0) -> float:
+    """Leading numeric value of an SVG length, ignoring any unit suffix.
+
+    Handles ``"100"``, ``"100px"``, ``"12.5pt"``, ``"3mm"`` and ``"50%"``
+    (the unit is dropped) without raising on units rstrip can't strip.
+    """
+    m = _LEN_RE.match(str(value).strip())
+    return float(m.group()) if m else default
+
+
 def _parse_viewbox(svg_attr: dict) -> tuple[float, float, float, float]:
     vb = svg_attr.get("viewBox") or svg_attr.get("viewbox")
     if vb:
         a = [float(x) for x in vb.replace(",", " ").split()]
-        return (a[0], a[1], a[2], a[3])
-    # fall back to width/height in user units
-    w = float(str(svg_attr.get("width", "0")).rstrip("pt").rstrip("px") or 0)
-    h = float(str(svg_attr.get("height", "0")).rstrip("pt").rstrip("px") or 0)
+        if len(a) >= 4:
+            return (a[0], a[1], a[2], a[3])
+        # malformed/truncated viewBox -> fall through to width/height
+    w = _parse_length(svg_attr.get("width", 0))
+    h = _parse_length(svg_attr.get("height", 0))
     return (0.0, 0.0, w, h)
 
 

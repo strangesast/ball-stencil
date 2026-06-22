@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -64,8 +64,11 @@ def check_mesh(mesh, cfg) -> MeshReport:
     uniq, counts = np.unique(undirected, axis=0, return_counts=True)
     n_boundary = int(np.sum(counts == 1))
     n_nonmanifold = int(np.sum(counts > 2))
-    is_watertight = n_boundary == 0 and n_nonmanifold == 0
-    is_manifold = bool(np.all(counts == 2))
+    # An empty mesh must not pass: np.all([]) is True and sums over empty
+    # arrays are 0, which would otherwise report watertight/manifold/clean.
+    has_faces = len(f) > 0
+    is_watertight = has_faces and n_boundary == 0 and n_nonmanifold == 0
+    is_manifold = bool(has_faces and np.all(counts == 2))
 
     # consistent winding: each directed edge appears at most once
     du = np.unique(directed, axis=0, return_counts=True)[1]
@@ -87,7 +90,10 @@ def check_mesh(mesh, cfg) -> MeshReport:
     shortest = np.minimum.reduce([e0, e1, e2])
     with np.errstate(divide="ignore", invalid="ignore"):
         aspect = np.where(shortest > 1e-12, longest / shortest, np.inf)
-    n_degenerate = int(np.sum(shortest <= 1e-9))
+    # Degeneracy by AREA, not just shortest edge: a near-collinear sliver can
+    # have three non-trivial edges yet ~zero area and an ill-defined normal.
+    areas = 0.5 * np.linalg.norm(np.cross(b - a, c - a), axis=1)
+    n_degenerate = int(np.sum((areas <= 1e-9) | (shortest <= 1e-12)))
     max_aspect = float(np.max(aspect[np.isfinite(aspect)], initial=0.0))
 
     # --- signed volume -------------------------------------------------------
