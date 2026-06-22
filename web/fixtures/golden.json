@@ -1,0 +1,651 @@
+{
+  "cases": [
+    {
+      "svg": "splash.svg",
+      "overrides": {},
+      "r_ref": 244.285936,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 105.4,
+      "center": [
+        221.19166,
+        221.191665
+      ],
+      "chord_error_mm": 0.1,
+      "spacing_svg": 1.83962,
+      "n_cut_regions": 51,
+      "n_components": 2,
+      "islands_mm2": [
+        47715.1557,
+        24.0913
+      ],
+      "n_vertices": 101516,
+      "n_faces": 203204,
+      "n_planar": 50758,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.176001,
+      "edge_len_max": 2.553985,
+      "max_aspect_ratio": 83.855468,
+      "signed_volume_mm3": 93675.5006,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "splash.svg",
+      "overrides": {
+        "wall_thickness_mm": 4.0
+      },
+      "r_ref": 244.285936,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 107.4,
+      "center": [
+        221.19166,
+        221.191665
+      ],
+      "chord_error_mm": 0.1,
+      "spacing_svg": 1.805363,
+      "n_cut_regions": 51,
+      "n_components": 2,
+      "islands_mm2": [
+        49542.2269,
+        25.0143
+      ],
+      "n_vertices": 105014,
+      "n_faces": 210200,
+      "n_planar": 52507,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.291523,
+      "edge_len_max": 4.309375,
+      "max_aspect_ratio": 167.701877,
+      "signed_volume_mm3": 190971.6028,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "splash.svg",
+      "overrides": {
+        "cap_angle_deg": 60.0
+      },
+      "r_ref": 244.285936,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 105.4,
+      "center": [
+        221.19166,
+        221.191665
+      ],
+      "chord_error_mm": 0.1,
+      "spacing_svg": 2.692928,
+      "n_cut_regions": 51,
+      "n_components": 2,
+      "islands_mm2": [
+        23869.0825,
+        11.9754
+      ],
+      "n_vertices": 53412,
+      "n_faces": 106996,
+      "n_planar": 26706,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.184058,
+      "edge_len_max": 2.427337,
+      "max_aspect_ratio": 104.512639,
+      "signed_volume_mm3": 46860.0048,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "splash.svg",
+      "overrides": {
+        "target_edge_mm": 2.5
+      },
+      "r_ref": 244.285936,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 105.4,
+      "center": [
+        221.19166,
+        221.191665
+      ],
+      "chord_error_mm": 0.1,
+      "spacing_svg": 3.832542,
+      "n_cut_regions": 51,
+      "n_components": 2,
+      "islands_mm2": [
+        47715.1557,
+        24.0913
+      ],
+      "n_vertices": 33016,
+      "n_faces": 66204,
+      "n_planar": 16508,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 2.096715,
+      "edge_len_max": 4.895797,
+      "max_aspect_ratio": 143.887625,
+      "signed_volume_mm3": 93658.7368,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "splash.svg",
+      "overrides": {
+        "sphere_diameter_mm": 180.0
+      },
+      "r_ref": 244.285936,
+      "inner_radius_mm": 90.4,
+      "outer_radius_mm": 92.4,
+      "center": [
+        221.19166,
+        221.191665
+      ],
+      "chord_error_mm": 0.1,
+      "spacing_svg": 2.098441,
+      "n_cut_regions": 51,
+      "n_components": 2,
+      "islands_mm2": [
+        36674.1667,
+        18.515
+      ],
+      "n_vertices": 80726,
+      "n_faces": 161624,
+      "n_planar": 40363,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.175597,
+      "edge_len_max": 2.4359,
+      "max_aspect_ratio": 95.912706,
+      "signed_volume_mm3": 71805.0881,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "splash_z.svg",
+      "overrides": {},
+      "r_ref": 125.449746,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 105.4,
+      "center": [
+        221.19166,
+        221.191665
+      ],
+      "chord_error_mm": 0.1,
+      "spacing_svg": 0.944712,
+      "n_cut_regions": 1,
+      "n_components": 1,
+      "islands_mm2": [
+        45841.6531
+      ],
+      "n_vertices": 88404,
+      "n_faces": 176740,
+      "n_planar": 44202,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.161265,
+      "edge_len_max": 3.782837,
+      "max_aspect_ratio": 36.53146,
+      "signed_volume_mm3": 89954.9865,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "dot.svg",
+      "overrides": {},
+      "r_ref": 31.825606,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 105.4,
+      "center": [
+        100.0,
+        100.0
+      ],
+      "chord_error_mm": 0.1,
+      "spacing_svg": 0.239666,
+      "n_cut_regions": 1,
+      "n_components": 1,
+      "islands_mm2": [
+        6560.8444
+      ],
+      "n_vertices": 16356,
+      "n_faces": 32640,
+      "n_planar": 8178,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.249576,
+      "edge_len_max": 5.469536,
+      "max_aspect_ratio": 12.330452,
+      "signed_volume_mm3": 12902.173,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "dot.svg",
+      "overrides": {
+        "wall_thickness_mm": 4.0
+      },
+      "r_ref": 31.825606,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 107.4,
+      "center": [
+        100.0,
+        100.0
+      ],
+      "chord_error_mm": 0.1,
+      "spacing_svg": 0.235203,
+      "n_cut_regions": 1,
+      "n_components": 1,
+      "islands_mm2": [
+        6812.1951
+      ],
+      "n_vertices": 16756,
+      "n_faces": 33440,
+      "n_planar": 8378,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.473389,
+      "edge_len_max": 6.512111,
+      "max_aspect_ratio": 24.599217,
+      "signed_volume_mm3": 26303.6926,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "dot.svg",
+      "overrides": {
+        "cap_angle_deg": 60.0
+      },
+      "r_ref": 31.825606,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 105.4,
+      "center": [
+        100.0,
+        100.0
+      ],
+      "chord_error_mm": 0.1,
+      "spacing_svg": 0.350835,
+      "n_cut_regions": 1,
+      "n_components": 1,
+      "islands_mm2": [
+        3280.4222
+      ],
+      "n_vertices": 9870,
+      "n_faces": 19668,
+      "n_planar": 4935,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.220291,
+      "edge_len_max": 4.84189,
+      "max_aspect_ratio": 14.561717,
+      "signed_volume_mm3": 6452.789,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "dot.svg",
+      "overrides": {
+        "target_edge_mm": 2.5
+      },
+      "r_ref": 31.825606,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 105.4,
+      "center": [
+        100.0,
+        100.0
+      ],
+      "chord_error_mm": 0.1,
+      "spacing_svg": 0.499304,
+      "n_cut_regions": 1,
+      "n_components": 1,
+      "islands_mm2": [
+        6560.8444
+      ],
+      "n_vertices": 6980,
+      "n_faces": 13888,
+      "n_planar": 3490,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.972413,
+      "edge_len_max": 5.469536,
+      "max_aspect_ratio": 29.645207,
+      "signed_volume_mm3": 12876.1947,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "dot.svg",
+      "overrides": {
+        "sphere_diameter_mm": 180.0
+      },
+      "r_ref": 31.825606,
+      "inner_radius_mm": 90.4,
+      "outer_radius_mm": 92.4,
+      "center": [
+        100.0,
+        100.0
+      ],
+      "chord_error_mm": 0.1,
+      "spacing_svg": 0.273385,
+      "n_cut_regions": 1,
+      "n_components": 1,
+      "islands_mm2": [
+        5042.2277
+      ],
+      "n_vertices": 13398,
+      "n_faces": 26724,
+      "n_planar": 6699,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.256569,
+      "edge_len_max": 4.884974,
+      "max_aspect_ratio": 15.322259,
+      "signed_volume_mm3": 9888.6434,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "dot.svg",
+      "overrides": {
+        "fit_clearance_mm": 1.0
+      },
+      "r_ref": 31.825606,
+      "inner_radius_mm": 104.0,
+      "outer_radius_mm": 106.0,
+      "center": [
+        100.0,
+        100.0
+      ],
+      "chord_error_mm": 0.1,
+      "spacing_svg": 0.238309,
+      "n_cut_regions": 1,
+      "n_components": 1,
+      "islands_mm2": [
+        6635.7535
+      ],
+      "n_vertices": 16486,
+      "n_faces": 32900,
+      "n_planar": 8243,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.249352,
+      "edge_len_max": 5.49678,
+      "max_aspect_ratio": 12.420953,
+      "signed_volume_mm3": 13050.0711,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "ring.svg",
+      "overrides": {},
+      "r_ref": 42.432384,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 105.4,
+      "center": [
+        100.0,
+        100.0
+      ],
+      "chord_error_mm": 0.1,
+      "spacing_svg": 0.319541,
+      "n_cut_regions": 1,
+      "n_components": 2,
+      "islands_mm2": [
+        15045.7098,
+        6861.3057
+      ],
+      "n_vertices": 44866,
+      "n_faces": 89676,
+      "n_planar": 22433,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.171567,
+      "edge_len_max": 3.808157,
+      "max_aspect_ratio": 15.526205,
+      "signed_volume_mm3": 43020.3699,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "ring.svg",
+      "overrides": {
+        "min_island_area_mm2": 0.0
+      },
+      "r_ref": 42.432384,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 105.4,
+      "center": [
+        100.0,
+        100.0
+      ],
+      "chord_error_mm": 0.1,
+      "spacing_svg": 0.319541,
+      "n_cut_regions": 1,
+      "n_components": 2,
+      "islands_mm2": [
+        15045.7098,
+        6861.3057
+      ],
+      "n_vertices": 44866,
+      "n_faces": 89676,
+      "n_planar": 22433,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.171567,
+      "edge_len_max": 3.808157,
+      "max_aspect_ratio": 15.526205,
+      "signed_volume_mm3": 43020.3699,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "ring.svg",
+      "overrides": {
+        "wall_thickness_mm": 4.0
+      },
+      "r_ref": 42.432384,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 107.4,
+      "center": [
+        100.0,
+        100.0
+      ],
+      "chord_error_mm": 0.1,
+      "spacing_svg": 0.313591,
+      "n_cut_regions": 1,
+      "n_components": 2,
+      "islands_mm2": [
+        15622.1219,
+        7124.1673
+      ],
+      "n_vertices": 46374,
+      "n_faces": 92692,
+      "n_planar": 23187,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.254626,
+      "edge_len_max": 5.167334,
+      "max_aspect_ratio": 31.003443,
+      "signed_volume_mm3": 87705.1145,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "multi.svg",
+      "overrides": {},
+      "r_ref": 84.8,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 105.4,
+      "center": [
+        150.0,
+        150.0
+      ],
+      "chord_error_mm": 0.1,
+      "spacing_svg": 0.638595,
+      "n_cut_regions": 4,
+      "n_components": 1,
+      "islands_mm2": [
+        53814.5974
+      ],
+      "n_vertices": 103384,
+      "n_faces": 206704,
+      "n_planar": 51692,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.154366,
+      "edge_len_max": 3.773628,
+      "max_aspect_ratio": 31.201915,
+      "signed_volume_mm3": 105605.6379,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "multi.svg",
+      "overrides": {
+        "cap_angle_deg": 60.0
+      },
+      "r_ref": 84.8,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 105.4,
+      "center": [
+        150.0,
+        150.0
+      ],
+      "chord_error_mm": 0.1,
+      "spacing_svg": 0.934807,
+      "n_cut_regions": 4,
+      "n_components": 1,
+      "islands_mm2": [
+        26907.2987
+      ],
+      "n_vertices": 50818,
+      "n_faces": 101572,
+      "n_planar": 25409,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.166927,
+      "edge_len_max": 3.41798,
+      "max_aspect_ratio": 37.239771,
+      "signed_volume_mm3": 52799.473,
+      "n_degenerate": 0,
+      "ok": true
+    }
+  ],
+  "errors": [
+    {
+      "svg": "dot.svg",
+      "overrides": {
+        "cap_angle_deg": 0.0
+      },
+      "error": "cap_angle_deg must be in (0, 180), got 0.0"
+    },
+    {
+      "svg": "dot.svg",
+      "overrides": {
+        "cap_angle_deg": 180.0
+      },
+      "error": "cap_angle_deg must be in (0, 180), got 180.0"
+    },
+    {
+      "svg": "dot.svg",
+      "overrides": {
+        "wall_thickness_mm": -1.0
+      },
+      "error": "wall_thickness_mm must be > 0, got -1.0"
+    },
+    {
+      "svg": "dot.svg",
+      "overrides": {
+        "cut_separation_svg": 100.0
+      },
+      "error": "UnsupportedOperationException: getX called on empty Point\n"
+    },
+    {
+      "svg": "dot.svg",
+      "overrides": {
+        "design_margin": 0.2
+      },
+      "error": "UnsupportedOperationException: getX called on empty Point\n"
+    }
+  ]
+}
