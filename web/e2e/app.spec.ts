@@ -5,6 +5,13 @@
  * the expected size, the main thread stays responsive, and no runtime network
  * requests occur after initial load. Golden expectations come from the shared
  * fixtures file (web/fixtures/golden.json), the single source of truth.
+ *
+ * Layout note (UI refactor): controls now live in translucent launcher panels
+ * that start collapsed. The selectors and asserted report text are UNCHANGED
+ * (#badge, #report-body, #p-<key>, #dl-*); the only additions below are small
+ * navigation helpers that open the relevant panel/group before reading or
+ * editing a control — exactly what a user does. The badge floats in the
+ * always-visible HUD, so badge assertions need no panel to be open.
  */
 import { test, expect } from "@playwright/test";
 import { fileURLToPath } from "node:url";
@@ -16,8 +23,31 @@ const SVG_DIR = join(here, "..", "fixtures", "svg");
 const golden = JSON.parse(readFileSync(join(here, "..", "fixtures", "golden.json"), "utf8"));
 const splashDefault = golden.cases.find((c: any) => c.svg === "splash.svg" && Object.keys(c.overrides).length === 0);
 
-async function loadSvg(page: import("@playwright/test").Page, name: string) {
+type Page = import("@playwright/test").Page;
+
+async function loadSvg(page: Page, name: string) {
   await page.setInputFiles("#file", join(SVG_DIR, name));
+}
+
+/** Open a launcher panel if it isn't already open (idempotent). */
+async function openPanel(page: Page, name: string) {
+  const chip = page.locator(`[data-panel="${name}"]`);
+  if ((await chip.getAttribute("aria-expanded")) !== "true") await chip.click();
+}
+
+/** The full metrics table lives in the (collapsible) Report panel. */
+async function readReport(page: Page): Promise<string> {
+  await openPanel(page, "report");
+  return page.locator("#report-body").innerText();
+}
+
+/** Open the Parameters panel and expand every group so #p-<key> is fillable. */
+async function setParam(page: Page, key: string, value: string) {
+  await openPanel(page, "params");
+  await page
+    .locator("#panel-params .group.collapsed .group-head")
+    .evaluateAll((els) => els.forEach((e) => (e as HTMLElement).click()));
+  await page.fill(`#p-${key}`, value);
 }
 
 test("builds splash.svg to a PASS stencil with the golden topology", async ({ page }) => {
@@ -25,7 +55,7 @@ test("builds splash.svg to a PASS stencil with the golden topology", async ({ pa
   await loadSvg(page, "splash.svg");
   await expect(page.locator("#badge")).toHaveText("PASS", { timeout: 40000 });
 
-  const body = await page.locator("#report-body").innerText();
+  const body = await readReport(page);
   // exact topology: 51 cut holes, 2 components incl. a free island
   expect(body).toContain("cut holes: 51");
   expect(body).toContain("material components: 2");
@@ -46,13 +76,13 @@ test("preview re-meshes live when parameters change (no Generate button)", async
   await loadSvg(page, "splash.svg");
   await expect(page.locator("#badge")).toHaveText("PASS", { timeout: 40000 });
   const volOf = async () => {
-    const b = await page.locator("#report-body").innerText();
+    const b = await readReport(page);
     return parseFloat(b.match(/signed volume\s+([\d.]+)/)![1]);
   };
   const v2 = await volOf();
 
   // change wall thickness 2 -> 4 and watch the report update on its own
-  await page.fill("#p-wall_thickness_mm", "4");
+  await setParam(page, "wall_thickness_mm", "4");
   await expect
     .poll(async () => Math.round(await volOf()), { timeout: 40000 })
     .toBeGreaterThan(Math.round(v2 * 1.5)); // wall 4 roughly doubles volume
@@ -64,13 +94,13 @@ test("rapid edits converge to the latest parameters", async ({ page }) => {
   await loadSvg(page, "splash.svg");
   await expect(page.locator("#badge")).toHaveText("PASS", { timeout: 40000 });
   // fire several quick edits; only the last (cap angle 60) should win
-  await page.fill("#p-cap_angle_deg", "120");
-  await page.fill("#p-cap_angle_deg", "90");
-  await page.fill("#p-cap_angle_deg", "60");
+  await setParam(page, "cap_angle_deg", "120");
+  await setParam(page, "cap_angle_deg", "90");
+  await setParam(page, "cap_angle_deg", "60");
   const cap60 = golden.cases.find((c: any) => c.svg === "splash.svg" && c.overrides.cap_angle_deg === 60);
   await expect
     .poll(async () => {
-      const b = await page.locator("#report-body").innerText();
+      const b = await readReport(page);
       const mm = b.match(/signed volume\s+([\d.]+)/);
       return mm ? parseFloat(mm[1]) : 0;
     }, { timeout: 40000 })
@@ -99,7 +129,7 @@ test("STL / OBJ / ball downloads produce files of the expected size", async ({ p
   await loadSvg(page, "splash.svg");
   await expect(page.locator("#badge")).toHaveText("PASS", { timeout: 40000 });
 
-  const body = await page.locator("#report-body").innerText();
+  const body = await readReport(page);
   const faces = parseInt(body.match(/vertices \/ faces\s+[\d,]+\s*\/\s*([\d,]+)/)![1].replace(/,/g, ""), 10);
   const verts = parseInt(body.match(/vertices \/ faces\s+([\d,]+)/)![1].replace(/,/g, ""), 10);
 
@@ -128,7 +158,7 @@ test("no external network requests after initial load", async ({ page }) => {
   await page.goto("/");
   await loadSvg(page, "splash.svg");
   await expect(page.locator("#badge")).toHaveText("PASS", { timeout: 40000 });
-  await page.fill("#p-wall_thickness_mm", "3");
+  await setParam(page, "wall_thickness_mm", "3");
   await page.waitForTimeout(1500);
   expect(external, external.join("\n")).toHaveLength(0);
 });
@@ -137,21 +167,23 @@ test("splash_z builds a single-hole, single-component stencil (no island)", asyn
   await page.goto("/");
   await loadSvg(page, "splash_z.svg");
   await expect(page.locator("#badge")).toHaveText("PASS", { timeout: 40000 });
-  const body = await page.locator("#report-body").innerText();
+  const body = await readReport(page);
   expect(body).toContain("cut holes: 1");
   expect(body).toContain("material components: 1");
   expect(body).not.toContain("free island");
 });
 
-// -- download helpers -------------------------------------------------------
-async function downloadBytes(page: import("@playwright/test").Page, sel: string): Promise<number> {
+// -- download helpers (open the Download panel before clicking) -------------
+async function downloadBytes(page: Page, sel: string): Promise<number> {
+  await openPanel(page, "downloads");
   const [download] = await Promise.all([page.waitForEvent("download"), page.click(sel)]);
   const stream = await download.createReadStream();
   let len = 0;
   for await (const chunk of stream) len += (chunk as Buffer).length;
   return len;
 }
-async function downloadText(page: import("@playwright/test").Page, sel: string): Promise<string> {
+async function downloadText(page: Page, sel: string): Promise<string> {
+  await openPanel(page, "downloads");
   const [download] = await Promise.all([page.waitForEvent("download"), page.click(sel)]);
   const stream = await download.createReadStream();
   const chunks: Buffer[] = [];

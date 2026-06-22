@@ -2,59 +2,91 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0e1014" />
+    <meta name="description" content="Filled SVG → watertight draw-through hemispherical stencil shell. Runs fully in your browser, offline." />
     <title>ball-stencil — SVG → draw-through sphere stencil</title>
+    <link rel="icon" href="./favicon.ico" sizes="32x32" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon-180x180.png" />
     <link rel="stylesheet" href="./src/style.css" />
   </head>
   <body>
-    <header>
+    <!-- full-bleed 3D canvas behind everything -->
+    <canvas id="gl"></canvas>
+
+    <!-- slim translucent title bar -->
+    <header id="topbar">
       <h1>ball&#8209;stencil</h1>
-      <span class="sub">Filled SVG → watertight draw&#8209;through hemispherical stencil shell. Everything runs in your browser.</span>
+      <span class="sub">SVG → draw&#8209;through sphere stencil</span>
     </header>
 
-    <main>
-      <aside id="panel">
-        <section class="card">
-          <h2>Artwork</h2>
-          <div id="drop" class="drop">
-            <input type="file" id="file" accept=".svg,image/svg+xml" hidden />
-            <button id="pick" class="primary">Choose SVG…</button>
-            <span class="hint">or drag &amp; drop an SVG</span>
-            <div id="svginfo" class="svginfo"></div>
-          </div>
-        </section>
+    <!-- always-visible status HUD (persists even when all panels are closed) -->
+    <div id="hud" class="hud">
+      <span id="badge" class="badge" role="status" aria-live="polite">—</span>
+      <span id="overlay" class="overlay" aria-live="polite"></span>
+      <div id="hud-warn" class="hud-warn" role="alert" hidden></div>
+    </div>
 
-        <section class="card">
-          <div class="card-head"><h2>Parameters</h2><button id="reset" class="link">reset defaults</button></div>
-          <div id="params"></div>
-        </section>
-      </aside>
+    <!-- dim backdrop for modal sheets (mobile) -->
+    <div id="backdrop" hidden></div>
 
-      <section id="stage">
-        <canvas id="gl"></canvas>
-        <div id="overlay" class="overlay"></div>
+    <!-- launcher dock -->
+    <nav id="dock" aria-label="Controls">
+      <button class="chip" type="button" data-panel="artwork" aria-expanded="false" aria-controls="panel-artwork">Artwork</button>
+      <button class="chip" type="button" data-panel="params" aria-expanded="false" aria-controls="panel-params">Parameters</button>
+      <button class="chip" type="button" data-panel="report" aria-expanded="false" aria-controls="panel-report">Report</button>
+      <button class="chip" type="button" data-panel="downloads" aria-expanded="false" aria-controls="panel-downloads">Download</button>
+      <button class="chip" type="button" data-panel="view" aria-expanded="false" aria-controls="panel-view">View</button>
+    </nav>
+
+    <!-- overlay panels / mobile sheets -->
+    <section id="panel-artwork" class="sheet" role="dialog" aria-modal="false" aria-label="Artwork" hidden>
+      <div class="sheet-head"><span class="grip" aria-hidden="true"></span><h2>Artwork</h2><button class="sheet-close" type="button" aria-label="Close">×</button></div>
+      <div class="sheet-body">
+        <div id="drop" class="drop">
+          <input type="file" id="file" accept=".svg,image/svg+xml" hidden />
+          <button id="pick" class="primary" type="button">Choose SVG…</button>
+          <span class="hint">or drag &amp; drop an SVG anywhere</span>
+          <div id="svginfo" class="svginfo"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-params" class="sheet" role="dialog" aria-modal="false" aria-label="Parameters" hidden>
+      <div class="sheet-head"><span class="grip" aria-hidden="true"></span><h2>Parameters</h2><button id="reset" class="link" type="button">reset defaults</button><button class="sheet-close" type="button" aria-label="Close">×</button></div>
+      <div class="sheet-body"><div id="params"></div></div>
+    </section>
+
+    <section id="panel-report" class="sheet" role="dialog" aria-modal="false" aria-label="Report" hidden>
+      <div class="sheet-head"><span class="grip" aria-hidden="true"></span><h2>Report</h2><button class="sheet-close" type="button" aria-label="Close">×</button></div>
+      <div class="sheet-body"><div id="report-body" class="report-body">Load an SVG to build a stencil.</div></div>
+    </section>
+
+    <section id="panel-downloads" class="sheet" role="dialog" aria-modal="false" aria-label="Download" hidden>
+      <div class="sheet-head"><span class="grip" aria-hidden="true"></span><h2>Download</h2><button class="sheet-close" type="button" aria-label="Close">×</button></div>
+      <div class="sheet-body">
+        <div class="downloads">
+          <button id="dl-stl" type="button" disabled>Stencil STL</button>
+          <button id="dl-obj" type="button" disabled>Stencil OBJ</button>
+          <button id="dl-ball" type="button" disabled>Reference ball STL</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-view" class="sheet" role="dialog" aria-modal="false" aria-label="View" hidden>
+      <div class="sheet-head"><span class="grip" aria-hidden="true"></span><h2>View</h2><button class="sheet-close" type="button" aria-label="Close">×</button></div>
+      <div class="sheet-body">
         <div class="viewbar">
-          <label><input type="checkbox" id="t-ball" checked /> ball</label>
+          <label><input type="checkbox" id="t-ball" checked /> reference ball</label>
           <label><input type="checkbox" id="t-wire" /> wireframe</label>
           <label><input type="checkbox" id="t-spin" checked /> auto&#8209;rotate</label>
         </div>
-      </section>
+      </div>
+    </section>
 
-      <aside id="report">
-        <section class="card">
-          <div class="card-head"><h2>Report</h2><span id="badge" class="badge">—</span></div>
-          <div id="report-body" class="report-body">Load an SVG to build a stencil.</div>
-        </section>
-        <section class="card">
-          <h2>Download</h2>
-          <div class="downloads">
-            <button id="dl-stl" disabled>Stencil STL</button>
-            <button id="dl-obj" disabled>Stencil OBJ</button>
-            <button id="dl-ball" disabled>Reference ball STL</button>
-          </div>
-        </section>
-      </aside>
-    </main>
+    <!-- transient toasts (update / offline-ready / install) -->
+    <div id="toasts" class="toasts" aria-live="polite"></div>
 
     <script type="module" src="./src/main.ts"></script>
   </body>

@@ -132,13 +132,37 @@ export class Viewer {
   private bindInput() {
     const c = this.canvas;
     let lastX = 0, lastY = 0, mode = 0;
+    // Active touch/mouse pointers, so two-finger pinch can zoom on mobile.
+    const pts = new Map<number, { x: number; y: number }>();
+    let pinchDist = 0;
+    const twoFingerDist = () => {
+      const [a, b] = [...pts.values()];
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    };
     c.addEventListener("pointerdown", (e) => {
-      this.dragging = true;
-      mode = e.button === 2 || e.shiftKey ? 2 : 1;
-      lastX = e.clientX; lastY = e.clientY;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       c.setPointerCapture(e.pointerId);
+      if (pts.size === 1) {
+        this.dragging = true;
+        mode = e.button === 2 || e.shiftKey ? 2 : 1;
+        lastX = e.clientX; lastY = e.clientY;
+      } else if (pts.size === 2) {
+        this.dragging = false; // hand off to pinch
+        pinchDist = twoFingerDist();
+      }
     });
     c.addEventListener("pointermove", (e) => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size >= 2) {
+        // pinch-to-zoom (dist tracks the camera distance, not render math)
+        const d = twoFingerDist();
+        if (pinchDist > 0 && d > 0) {
+          this.dist = Math.max(20, Math.min(2000, this.dist * (pinchDist / d)));
+        }
+        pinchDist = d;
+        return;
+      }
       if (!this.dragging) return;
       const dx = e.clientX - lastX, dy = e.clientY - lastY;
       lastX = e.clientX; lastY = e.clientY;
@@ -152,7 +176,18 @@ export class Viewer {
         this.target[2] += dy * k;
       }
     });
-    const end = (e: PointerEvent) => { this.dragging = false; try { c.releasePointerCapture(e.pointerId); } catch {} };
+    const end = (e: PointerEvent) => {
+      pts.delete(e.pointerId);
+      try { c.releasePointerCapture(e.pointerId); } catch { /* not captured */ }
+      if (pts.size < 2) pinchDist = 0;
+      if (pts.size === 0) this.dragging = false;
+      else if (pts.size === 1) {
+        // resume single-pointer orbit from the remaining finger
+        this.dragging = true; mode = 1;
+        const [p] = [...pts.values()];
+        lastX = p.x; lastY = p.y;
+      }
+    };
     c.addEventListener("pointerup", end);
     c.addEventListener("pointercancel", end);
     c.addEventListener("contextmenu", (e) => e.preventDefault());

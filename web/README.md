@@ -1,11 +1,60 @@
 # ball-stencil (browser port)
 
-A **fully client-side** web app that reproduces the Python `ball-stencil` tool.
-Pick a filled SVG, optionally tweak parameters, watch a live 3D preview of the
-resulting draw-through hemispherical stencil shell, and download it as **STL**
-and **OBJ** (plus a reference ball STL). SVG parsing, 2D geometry, sphere
-mapping, meshing, validation and export all run **in the browser** — no server,
-no backend, no runtime network calls.
+A **fully client-side**, installable **PWA** that reproduces the Python
+`ball-stencil` tool. Pick a filled SVG, optionally tweak parameters, watch a
+live 3D preview of the resulting draw-through hemispherical stencil shell, and
+download it as **STL** and **OBJ** (plus a reference ball STL). SVG parsing, 2D
+geometry, sphere mapping, meshing, validation and export all run **in the
+browser** — no server, no backend, no runtime network calls. After the first
+visit it works **fully offline** and can be installed to the home screen / dock.
+
+## Layout & interaction
+
+The 3D view is the whole canvas; controls are lightweight translucent
+(frosted-glass) overlays on top of it, not columns that shrink the view.
+
+- **Full-bleed canvas.** The WebGL2 preview fills the viewport edge to edge.
+  Orbit with one-finger drag / left-drag, pan with right-/shift-drag, zoom with
+  the wheel or a two-finger pinch on touch. The canvas is sized to the *visual*
+  viewport (`100dvh` + `visualViewport`) so iOS toolbar show/hide and the
+  on-screen keyboard don't clip or distort it.
+- **Always-visible status HUD.** The PASS / FAIL badge, the triangle/holes/R_ref
+  readout, and any warnings — notably the **free-island** warning (the stencil
+  would physically fall apart) — float persistently over the canvas, visible
+  even when every panel is closed.
+- **Launcher dock.** A small bottom dock of chips (Artwork, Parameters, Report,
+  Download, View) opens one overlay at a time. Everything starts **collapsed**,
+  so the default state is just the 3D view + the HUD. On desktop the overlays are
+  non-modal floating cards; on tablet/phone (≤1024 px) they become **modal
+  bottom-sheets** with a backdrop, focus trap, and Escape / backdrop-tap /
+  swipe-down to close. Parameter groups are collapsible `aria-expanded` sections,
+  each field carrying a one-line helper description.
+
+## Persistence (resume where you left off)
+
+The last loaded SVG (text + name), all parameter values, and panel/group
+open state are saved to `localStorage` and restored — and the stencil rebuilt —
+on launch. This is local only; nothing persisted triggers a network call.
+Reads are defensive (corrupt / oversized values fall back to defaults + the
+first-run reference-ball state) and writes survive `QuotaExceededError` (the
+small metadata persists even if the ~140 kB SVG blob can't). `reset defaults`
+forgets persisted parameter customizations.
+
+## PWA / offline / updates
+
+Built with `vite-plugin-pwa` in **`injectManifest`** mode: we author the service
+worker ourselves (`src/sw.ts`) and the plugin only injects the precache list of
+the real hashed `dist/` output — **including the lazy ~97 kB worker/pipeline
+chunk that `index.html` never references**, which a hand-rolled glob would
+silently miss. The SW precaches the whole app shell cache-first, so a full mesh
+build + STL/OBJ export works with no network. Cache names are versioned and old
+precaches are cleaned on activate. All SW traffic is same-origin.
+
+Updates use the `prompt` flow (`virtual:pwa-register`): when a new build is
+deployed, a non-intrusive **“Update available — Reload”** toast appears and
+applies the waiting SW on tap; a subtle “Ready to work offline” toast confirms
+first-time caching, and `beforeinstallprompt` (Android/desktop Chrome) surfaces
+a dismissible **Install** action (iOS gets a one-time add-to-home-screen hint).
 
 The Python package in the parent directory (`../ball_stencil/`) is the reference
 implementation; this port matches its behaviour and output. `splash.svg` at
@@ -16,13 +65,23 @@ a 24 mm² free island, signed volume ≈ 93675 mm³, watertight + 2-manifold).
 
 ```bash
 npm install
-npm run dev        # Vite dev server
+npm run dev        # Vite dev server (the PWA dev SW is enabled via devOptions)
 npm run build      # static production build into dist/  (deploy anywhere)
 npm run preview    # serve the production build on :4173
 ```
 
 Open the page, choose an SVG (try `fixtures/svg/splash.svg`), and adjust
 parameters — the preview re-meshes live with a slow turntable spin.
+
+Icons are generated from `public/icon.svg` into `public/` by
+`npx pwa-assets-generator` (config in `pwa-assets.config.ts`); the committed
+outputs (favicon, pwa-*, maskable, apple-touch-icon) only need regenerating when
+the source icon changes. Both are dev-only.
+
+**Dev caveat:** `devOptions.enabled` serves a service worker on `npm run dev`
+too (so offline behaviour is testable without a build) without breaking HMR. If
+a stale dev SW ever interferes, unregister it in DevTools → Application, or just
+use `npm run preview` which serves the real production SW.
 
 ## Tests
 
@@ -41,11 +100,19 @@ npm run test:e2e   # browser e2e (Playwright): drives the real app
   component count, `R_ref`, radii, ~zero radius error, 0 degenerate triangles),
   the signed volume within ±1% for the `splash` targets, free-island detection,
   STL byte length (`84 + 50·nFaces`) and OBJ vert/face parsing, plus error cases.
-- **Browser e2e** loads the built app, selects an SVG via the file input,
-  changes parameters, and asserts: the report updates live (no Generate button)
-  and converges after rapid edits; PASS + golden values appear; STL/OBJ/ball
-  downloads are non-empty and the expected size; the main thread keeps ticking
-  during a build; and no external network requests occur after load.
+- **Browser e2e** (12 tests) runs against the **production preview build**
+  (`playwright.config.ts` webServer = `npm run build && npm run preview`), so the
+  real production service worker is active. It loads the built app, selects an
+  SVG via the file input, changes parameters, and asserts: the report updates
+  live (no Generate button) and converges after rapid edits; PASS + golden values
+  appear; STL/OBJ/ball downloads are non-empty and the expected size; the main
+  thread keeps ticking during a build; and no external network requests occur
+  after load. Added PWA coverage: first-run idle state, favicon served (no 404),
+  persistence/resume across reload, a **fully offline** boot + build + export
+  (network disabled), and the update-available toast wiring. Controls live in
+  collapsible launcher panels, so the e2e opens the relevant panel/group before
+  reading or editing a control — the selectors and asserted report text
+  (`#badge`, `#report-body`, `#p-<key>`, `#dl-*`) are unchanged.
 
 Regenerate the golden fixtures from the Python oracle (run from the repo root):
 
@@ -71,8 +138,12 @@ src/
     exportmesh.ts    binary STL + OBJ writers, UV reference sphere
     pipeline.ts      orchestration (two-pass chord budget → build → validate)
   worker.ts        ← receives params, runs the pipeline, posts transferable buffers
-  viewer.ts        ← hand-rolled WebGL2: shell + translucent ball, orbit + turntable
-  main.ts          ← UI: file input, parameter panel, report, downloads
+  viewer.ts        ← hand-rolled WebGL2: shell + translucent ball, orbit + pinch + turntable
+  ui/sheet.ts      ← launcher-panel / modal bottom-sheet manager (focus trap, Esc, swipe)
+  persist.ts       ← localStorage save/restore (params + SVG + panel state)
+  pwa.ts           ← SW registration + update/offline/install toasts
+  sw.ts            ← the service worker (injectManifest precache, cache-first shell)
+  main.ts          ← UI: file input, parameter panel, status HUD, report, downloads
 ```
 
 Mesh buffers are transferred back as `ArrayBuffer` (zero copy). Builds are
@@ -102,12 +173,17 @@ Approximate production output (`npm run build`, raw / gzip):
 
 | chunk | raw | role |
 |---|---|---|
-| main UI (`index`) | ~17 kB (~7 kB gz) | loaded up front (UI + WebGL viewer) |
+| main UI (`index`) | ~27 kB (~10 kB gz) | loaded up front (UI + WebGL viewer + overlays/persistence/PWA glue) |
+| `workbox-window` (PWA register) | ~6 kB (~2.4 kB gz) | tiny SW registration client |
 | pipeline (worker, lazy) | ~97 kB (~30 kB gz) | Clipper2 + Delaunator + geometry |
-| worker / css / small chunks | ~7 kB | |
+| worker / css / small chunks | ~10 kB | |
 
-Initial main-thread JS is ~17 kB; the ~97 kB geometry chunk loads in the worker
-on first build. No runtime CDN or network dependency — fully offline after load.
+Initial main-thread JS is ~27 kB (was ~17 kB before the immersive-UI + PWA
+refactor: the overlay/sheet manager, persistence, and PWA registration glue add
+~10 kB raw / ~3 kB gz). The ~97 kB geometry chunk still loads in the worker on
+first build. The service worker runs on its own thread and bundles its Workbox
+runtime at build time, so it adds nothing to the main-thread budget and makes no
+runtime network call. No runtime CDN dependency — fully offline after load.
 
 ## Parity notes / limitations
 
