@@ -1,0 +1,10 @@
+*.svg
+*.png
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Generated meshes / renders (regenerable via `python -m ball_stencil`)
+out/

@@ -1,0 +1,11 @@
+[project]
+name = "ball-stencil"
+version = "0.1.0"
+description = "Convert filled SVG artwork into a watertight, draw-through hemispherical stencil shell for a ball."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "numpy>=2.4.6",
+    "shapely>=2.1.2",
+    "svgpathtools>=1.7.2",
+]
