@@ -9,7 +9,7 @@ import { UI_DEFAULT_PARAMS, Params, validateParams, ballRadius } from "./pipelin
 import { uvSphereTextured } from "./pipeline/exportmesh";
 import { Viewer } from "./viewer";
 import { Sheets } from "./ui/sheet";
-import { loadState, saveMeta, saveSvg, RenderMode, ProjectionTarget, SpinAxis } from "./persist";
+import { loadState, saveMeta, saveSvg, RenderMode, ProjectionTarget, SpinAxis, TraceBackend } from "./persist";
 import { DEFAULT_PAINT_HEX, hexToRgb } from "./color";
 import { initPwa } from "./pwa";
 import type { MeshReport } from "./pipeline/meshcheck";
@@ -67,7 +67,16 @@ let spinAxis: SpinAxis = restored?.spinAxis ?? "z";
 let paintOverride: string | null = restored?.paintOverride ?? null;
 let letterColor: string = restored?.letterColor ?? DEFAULT_PAINT_HEX;
 let lastSvgColor: string | null = null;
+// Raster-trace options (apply only when the picked file is an image). Restored
+// from the persisted meta; written back on change.
+let traceBackend: TraceBackend = restored?.traceBackend ?? "potrace";
+let traceThreshold: number = restored?.traceThreshold ?? 128;
 let jobId = 0;
+
+// Accepted raster formats — ONE source of truth for the picker accept, the
+// drag/drop branch, and validation (all decodable by createImageBitmap). SVG is
+// routed to the existing loader; everything matching this is traced.
+const RASTER_RE = /\.(png|jpe?g|webp|bmp|gif)$/i;
 // The bundled first-run sample is a placeholder, not user data: it is re-derived
 // on each empty launch, never persisted, and labelled as a sample. Any real
 // artwork (file, drop, or generated letter) clears this for the session.
@@ -105,6 +114,8 @@ function persist() {
     spinAxis,
     paintOverride,
     letterColor,
+    traceBackend,
+    traceThreshold,
   });
 }
 
@@ -411,10 +422,84 @@ function loadSvgText(text: string, name: string, opts: { isDefault?: boolean } =
 }
 
 function loadFile(file: File) {
+  lastRasterFile = null; // SVG artwork takes over; don't re-trace a prior raster
   const name = file.name.replace(/\.svg$/i, "") || "stencil";
   const reader = new FileReader();
   reader.onload = () => loadSvgText(String(reader.result), name);
   reader.readAsText(file);
+}
+
+/**
+ * One dispatcher for the single file entry (picker + drag/drop). SVG → the
+ * existing text loader; a raster (PNG/JPG/…) → the trace worker; anything else →
+ * an inline message. Routes by extension, falling back to the MIME type when the
+ * dropped file has no extension.
+ */
+function selectFile(file: File) {
+  setTraceError(null);
+  const isSvg = /\.svg$/i.test(file.name) || file.type === "image/svg+xml";
+  const isRaster = RASTER_RE.test(file.name) || (!/\.[a-z0-9]+$/i.test(file.name) && file.type.startsWith("image/"));
+  if (isSvg) loadFile(file);
+  else if (isRaster) traceFile(file);
+  else setTraceError(`Unsupported file “${file.name}”. Choose an SVG or an image (PNG, JPG, WebP, BMP, GIF).`);
+}
+
+// The trace worker is spawned lazily (only on the first raster) so SVG/letter
+// users never download the tracers, mirroring how the pipeline chunk is deferred.
+let traceWorker: Worker | null = null;
+function ensureTraceWorker(): Worker {
+  if (!traceWorker) {
+    traceWorker = new Worker(new URL("./trace.worker.ts", import.meta.url), { type: "module" });
+    traceWorker.onmessage = (e: MessageEvent) => {
+      const m = e.data;
+      if (m.type === "result") {
+        if (m.jobId !== traceJob) return; // stale trace, dropped by job id
+        // The name is derived on the main thread (the core never sees a filename);
+        // converge on the SAME entry point as the picker/drag/letter so
+        // persistence, showSvgInfo, firstMesh and build() all "just work".
+        loadSvgText(m.svgText as string, pendingTraceName);
+      } else if (m.type === "error") {
+        // jobId === -1 is an escaped/global worker error; always surface it.
+        if (m.jobId !== -1 && m.jobId !== traceJob) return;
+        setTraceError(m.message as string);
+        setBadge("fail", "FAIL");
+        setOverlay("Trace failed: " + m.message, true);
+      }
+    };
+    traceWorker.onerror = (e) => setTraceError(`trace worker crashed: ${e.message || "unknown error"}`);
+  }
+  return traceWorker;
+}
+
+// Monotonic id so a superseded trace (rapid re-picks / threshold drags) is dropped.
+// pendingTraceName carries the latest file's derived name across the round-trip.
+let traceJob = 0;
+let pendingTraceName = "image";
+// The last raster picked, kept so changing the backend/threshold re-traces it
+// without a re-pick (cleared implicitly when SVG/letter artwork takes over — its
+// own file is never set here, and a stale re-trace would be dropped by job id).
+let lastRasterFile: File | null = null;
+/** Trace a raster file off-thread, then route the returned SVG through the same
+ *  loadSvgText() convergence point the picker, drag/drop and letter generator use. */
+function traceFile(file: File) {
+  lastRasterFile = file;
+  pendingTraceName = file.name.replace(RASTER_RE, "") || "image";
+  const worker = ensureTraceWorker();
+  traceJob += 1;
+  setBadge("busy", "tracing…");
+  setOverlay("Tracing image…");
+  worker.postMessage({
+    type: "trace",
+    jobId: traceJob,
+    file,
+    opts: { backend: traceBackend, threshold: traceThreshold },
+  });
+}
+
+function setTraceError(msg: string | null) {
+  const el = $("trace-err");
+  if (msg) { el.textContent = msg; el.hidden = false; }
+  else { el.textContent = ""; el.hidden = true; }
 }
 
 function showSvgInfo() {
@@ -436,6 +521,7 @@ function showSvgInfo() {
 /** Generate a stencil from the typed character(s). On failure, show an inline
  *  message and leave the current artwork untouched (no blank build). */
 async function generateLetter(raw: string) {
+  lastRasterFile = null; // a typed letter takes over; don't re-trace a prior raster
   try {
     const { glyphToSvg } = await import("./glyph");
     const { svgText: text, name } = await glyphToSvg(raw, { fill: letterColor });
@@ -481,18 +567,43 @@ function init() {
   });
   $("letter-go").addEventListener("click", () => { clearTimeout(letterTimer); fireLetter(); });
 
-  // file picker + drag/drop (drop anywhere on the page)
+  // single file entry (SVG or raster) + drag/drop (drop anywhere on the page);
+  // one dispatcher routes by type.
   $("pick").addEventListener("click", () => ($("file") as HTMLInputElement).click());
   ($("file") as HTMLInputElement).addEventListener("change", (e) => {
     const f = (e.target as HTMLInputElement).files?.[0];
-    if (f) loadFile(f);
+    if (f) selectFile(f);
   });
   const dropHi = (on: boolean) => document.body.classList.toggle("dropping", on);
   ["dragenter", "dragover"].forEach((ev) => document.addEventListener(ev, (e) => { e.preventDefault(); dropHi(true); }));
   ["dragleave", "drop"].forEach((ev) => document.addEventListener(ev, (e) => { e.preventDefault(); dropHi(false); }));
   document.addEventListener("drop", (e) => {
     const f = (e as DragEvent).dataTransfer?.files?.[0];
-    if (f && /\.svg$/i.test(f.name)) loadFile(f);
+    if (f) selectFile(f);
+  });
+
+  // raster-trace options: backend radio + threshold (consulted by traceFile).
+  // Changing the backend re-traces the current raster (if one is loaded); the
+  // threshold re-traces on release (debounced) so the slider stays responsive.
+  const bkPotrace = $("tracebk-potrace") as HTMLInputElement;
+  const bkColor = $("tracebk-color") as HTMLInputElement;
+  const thr = $("trace-threshold") as HTMLInputElement;
+  bkPotrace.checked = traceBackend === "potrace";
+  bkColor.checked = traceBackend === "color";
+  thr.value = String(traceThreshold);
+  const onBackend = () => {
+    traceBackend = bkColor.checked ? "color" : "potrace";
+    persist();
+    if (lastRasterFile) traceFile(lastRasterFile);
+  };
+  bkPotrace.addEventListener("change", onBackend);
+  bkColor.addEventListener("change", onBackend);
+  let thrTimer = 0;
+  thr.addEventListener("input", () => {
+    traceThreshold = Math.min(255, Math.max(0, Math.round(Number(thr.value))));
+    persist();
+    clearTimeout(thrTimer);
+    if (lastRasterFile) thrTimer = window.setTimeout(() => traceFile(lastRasterFile!), 200);
   });
 
   $("reset").addEventListener("click", () => {

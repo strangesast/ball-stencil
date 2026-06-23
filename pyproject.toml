@@ -9,4 +9,12 @@ dependencies = [
     "shapely>=2.1.2",
     "svgpathtools>=1.7.2",
     "pypoly2tri>=0.0.3",
+    "vtracer>=0.6.15",
+    "pillow>=12.2.0",
+    "potracer>=0.0.4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
 ]

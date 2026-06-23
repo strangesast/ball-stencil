@@ -5,8 +5,10 @@ shell** that slips over a ball. The SVG fill becomes **through-cut holes**: plac
 the dome over the ball, draw/paint through the holes, lift it off, and the artwork
 is on the ball.
 
-The SVG is treated strictly as **vector geometry** (analytic parameterization onto
-the sphere — no raster, texture, or projection).
+Artwork is treated strictly as **vector geometry** (analytic parameterization onto
+the sphere — no texture or projection). A **raster image** (PNG/JPG/…) can also be
+used: it is first *traced* to a filled-silhouette SVG and then flows through the
+exact same pipeline (see [Raster input](#raster-input-pngjpg)).
 
 ## Run
 
@@ -28,6 +30,51 @@ Common overrides (all also live as constants in `ball_stencil/config.py`):
 uv run python -m ball_stencil splash.svg \
   --diameter 206 --clearance 0.4 --wall 2.0 --cap-angle 90 --target-edge 1.2
 ```
+
+## Raster input (PNG/JPG)
+
+Pass a raster image instead of an SVG and it is **traced to a filled monochrome
+silhouette SVG** first, written to `out/<name>_traced.svg` (inspectable), then run
+through the unchanged pipeline. Colour is out of scope — the trace is a silhouette;
+its dominant sampled colour becomes the projection paint, like a typed letter.
+
+```bash
+uv run python -m ball_stencil logo.png --trace-backend potrace --trace-threshold 128
+uv run python -m ball_stencil photo.jpg --trace-backend color   # tolerant of photos
+```
+
+Raster inputs are detected by extension (`.png/.jpg/.jpeg/.webp/.bmp/.gif`) or forced
+with `--trace`. Options (mirrored 1:1 by the web app):
+
+| flag | default | meaning |
+|------|---------|---------|
+| `--trace-backend {potrace,color}` | `potrace` | tracer engine (see below) |
+| `--trace-threshold INT` | 128 | bilevel cutoff 0–255 (luminance split) |
+| `--trace-invert` | off | trace light-on-dark instead of dark-on-light |
+| `--trace-detail INT` | 2 | despeckle (drops tiny islands; higher = fewer) |
+
+**Backends.** `potrace` (default, cleanest edge) uses the pure-Python
+[`potracer`](https://pypi.org/project/potracer/). The native `pypotrace` is *not*
+used: it fails to build here without `libpotrace`/`libagg`/`pkg-config`; `potracer`
+is the same Potrace algorithm with no native build. `color` uses
+[`vtracer`](https://pypi.org/project/vtracer/) (tolerant of photos/gradients).
+
+> **Note (vtracer + CPython ≥3.14):** the published vtracer wheels segfault under
+> CPython 3.14 (a pyo3 fastcall ABI bug). Since a segfault can't be caught, the
+> `color` backend detects this and traces the binarized mask with `potracer`
+> instead — a contract-identical silhouette. Set `BALL_STENCIL_FORCE_VTRACER=1` to
+> force vtracer where its wheel runs. No native system prerequisites are needed for
+> the default `potrace` backend.
+
+In the **web app** the same toggle (Potrace / Color) and threshold live under the
+Artwork sheet; picking *or dropping* an image traces it off the main thread in a Web
+Worker and feeds the result through the identical pipeline. The web `potrace` backend
+([esm-potrace-wasm](https://www.npmjs.com/package/esm-potrace-wasm)) marshals the
+image onto a 64 KB wasm stack, so raster inputs are downscaled to ≈12k pixels before
+tracing; the web `color` backend ([imagetracerjs](https://www.npmjs.com/package/imagetracerjs))
+has no such limit. A silhouette is low-frequency and the final cut-edge fidelity is
+governed downstream by `BOUNDARY_SMOOTHNESS_MM`, so the downscale is not a quality
+loss in practice.
 
 ## How it works
 

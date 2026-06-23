@@ -38,7 +38,10 @@ export default defineConfig({
       injectManifest: {
         // Precache the whole shell. The lazy ~97 kB pipeline chunk is bigger
         // than the 2 KB-ish default cap implies, but well under this ceiling.
-        globPatterns: ["**/*.{js,css,html,ico,png,jpg,svg,woff,woff2}"],
+        // wasm/jpeg added for the raster tracer: esm-potrace-wasm v0.4.4 embeds
+        // its wasm in the JS chunk (already precached as .js), but glob `wasm` so
+        // any future split-out hashed .wasm asset is precached for offline tracing.
+        globPatterns: ["**/*.{js,css,html,ico,png,jpg,jpeg,svg,woff,woff2,wasm}"],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },
       manifest: {

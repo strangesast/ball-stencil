@@ -57,10 +57,25 @@
         </div>
         <div class="or-divider"><span>or</span></div>
         <div id="drop" class="drop">
-          <input type="file" id="file" accept=".svg,image/svg+xml" hidden />
-          <button id="pick" class="primary" type="button">Choose SVG…</button>
-          <span class="hint">or drag &amp; drop an SVG anywhere</span>
+          <input type="file" id="file"
+                 accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp,image/bmp,image/gif" hidden />
+          <button id="pick" class="primary" type="button">Choose file…</button>
+          <span class="hint">SVG or image (PNG, JPG, WebP, BMP, GIF) — or drag &amp; drop anywhere</span>
           <div id="svginfo" class="svginfo"></div>
+          <!-- image-trace options: only consulted when the chosen file is a raster -->
+          <div class="trace-gen">
+            <fieldset id="trace-backend" class="seg">
+              <legend>Image trace</legend>
+              <input type="radio" name="tracebk" id="tracebk-potrace" value="potrace" checked />
+              <label for="tracebk-potrace">Potrace<small>clean</small></label>
+              <input type="radio" name="tracebk" id="tracebk-color" value="color" />
+              <label for="tracebk-color">Color<small>photos</small></label>
+            </fieldset>
+            <label class="trace-thresh">Threshold
+              <input type="range" id="trace-threshold" min="0" max="255" value="128" />
+            </label>
+            <div id="trace-err" class="err" role="alert" hidden></div>
+          </div>
         </div>
       </div>
     </section>

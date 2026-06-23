@@ -27,6 +27,7 @@ const MAX_SVG_CHARS = 2_000_000;
 export type RenderMode = "projection" | "stencil";
 export type ProjectionTarget = "top" | "front" | "back";
 export type SpinAxis = "z" | "x" | "y";
+export type TraceBackend = "potrace" | "color";
 
 export interface PersistMeta {
   params: Params;
@@ -41,6 +42,10 @@ export interface PersistMeta {
   paintOverride: string | null;
   /** Last colour chosen in the letter generator (#rrggbb). */
   letterColor: string;
+  /** Raster-trace backend toggle. */
+  traceBackend: TraceBackend;
+  /** Raster-trace bilevel threshold (0–255). */
+  traceThreshold: number;
 }
 export interface RestoredState extends PersistMeta {
   svgText: string | null;
@@ -100,6 +105,11 @@ export function loadState(): RestoredState | null {
       spinAxis: o.spinAxis === "x" || o.spinAxis === "y" ? o.spinAxis : "z",
       paintOverride: isHex(o.paintOverride) ? (o.paintOverride as string) : null,
       letterColor: isHex(o.letterColor) ? (o.letterColor as string) : DEFAULT_PAINT_HEX,
+      traceBackend: o.traceBackend === "color" ? "color" : "potrace",
+      traceThreshold:
+        typeof o.traceThreshold === "number" && Number.isFinite(o.traceThreshold)
+          ? Math.min(255, Math.max(0, Math.round(o.traceThreshold)))
+          : 128,
     };
   } catch {
     return null; // corrupt JSON → defaults

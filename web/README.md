@@ -9,11 +9,12 @@ all run **in the browser** — no server, no backend, no runtime network calls.
 After the first visit it works **fully offline** and can be installed to the
 home screen / dock.
 
-## Artwork: a letter, or any filled SVG
+## Artwork: a letter, a filled SVG, or a raster image
 
-Everything downstream consumes a parsed SVG, so the two front doors converge on
-one routine (`loadSvgText` in `main.ts`, also used by the file picker and
-drag-drop):
+Everything downstream consumes a parsed SVG, so the front doors converge on one
+routine (`loadSvgText` in `main.ts`, used by the file picker, drag-drop, the
+letter generator, and the raster tracer). A single file input (`selectFile`)
+routes SVG → `loadSvgText` and raster → the trace worker by type:
 
 - **Generate from a letter.** Type a character or short string (≤ 4) in the
   Artwork panel and the app synthesizes a clean `<svg viewBox><path d/></svg>`
@@ -35,6 +36,19 @@ drag-drop):
   license alongside). Heavy/high-contrast on purpose — thin or serif strokes
   trace poorly and produce slivers / free islands downstream. opentype.js itself
   is a lazy ~50 KB-gzip chunk, loaded only when a letter is first generated.
+- **Trace a raster (PNG/JPG/WebP/BMP/GIF).** Pick or drop an image and it is
+  traced to a filled monochrome **silhouette** SVG, then fed through the identical
+  pipeline. The Artwork panel has a backend toggle — **Potrace** (clean,
+  [esm-potrace-wasm]) / **Color** (photo-tolerant, [imagetracerjs]) — and a
+  threshold slider; both persist. Decode + trace run in `src/trace.worker.ts`
+  (createImageBitmap + OffscreenCanvas, lazy backend), never on the main thread;
+  the pure, DOM-free core is `src/pipeline/trace.ts` (mirrors the Python
+  `ball_stencil/raster.py`, unit-tested against `parseSvg`/`loadArtwork`). Colour
+  is out of scope — the trace is a silhouette whose dominant sampled colour becomes
+  the projection paint, exactly like a typed letter. esm-potrace-wasm marshals the
+  image onto a 64 KB wasm stack, so raster inputs are downscaled to ≈12k pixels for
+  the potrace backend (a silhouette is low-frequency and the cut-edge fidelity is
+  governed downstream, so this is not a quality loss in practice).
 
 **First-run default.** A brand-new visitor (no restored SVG) immediately sees a
 finished sample stencil — the letter **Z**, built through the same generator
@@ -47,6 +61,8 @@ generates anything, that replaces the sample permanently for the session and
 persists like any upload. A returning user's restored SVG is untouched.
 
 [opentype.js]: https://github.com/opentypejs/opentype.js
+[esm-potrace-wasm]: https://www.npmjs.com/package/esm-potrace-wasm
+[imagetracerjs]: https://www.npmjs.com/package/imagetracerjs
 
 ## Layout & interaction
 
