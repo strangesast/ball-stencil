@@ -187,6 +187,41 @@ test("splash_z builds a single-hole, single-component stencil (no island)", asyn
   expect(body).not.toContain("free island");
 });
 
+test("generates a stencil from a typed counter letter, downloadable by its name", async ({ page }) => {
+  await page.goto("/");
+  // The bundled sample (a solid letter) builds first; it has no free island.
+  await page.locator('[data-panel="report"]').click();
+  await expect(page.locator("#report-body")).not.toContainText("free island", { timeout: 40000 });
+
+  await openPanel(page, "artwork");
+  await page.fill("#letter", "B");
+  await page.click("#letter-go");
+
+  // B's ink is one through-hole; its two counters are carved out as free islands
+  // (the legitimate even-odd result) — proves counters are not filled solid.
+  await openPanel(page, "report");
+  await expect(page.locator("#report-body")).toContainText("cut holes: 1", { timeout: 40000 });
+  await expect(page.locator("#report-body")).toContainText("free island");
+  await expect(page.locator("#badge")).toHaveText("PASS");
+
+  // Downloads read "<letter>_stencil.stl" (no "sample" tag — it is now user data).
+  await openPanel(page, "downloads");
+  const [dl] = await Promise.all([page.waitForEvent("download"), page.click("#dl-stl")]);
+  expect(dl.suggestedFilename()).toBe("B_stencil.stl");
+});
+
+test("whitespace letter input is rejected with a message, no blank build", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("#badge")).toHaveText("PASS", { timeout: 40000 }); // sample built
+  await openPanel(page, "artwork");
+  await page.fill("#letter", "   ");
+  await page.click("#letter-go");
+  await expect(page.locator("#letter-err")).toBeVisible();
+  await expect(page.locator("#letter-err")).toContainText("Type a letter");
+  // The sample remains; the badge is not stuck building and the view is not blank.
+  await expect(page.locator("#badge")).toHaveText("PASS");
+});
+
 // -- download helpers (open the Download panel before clicking) -------------
 async function downloadBytes(page: Page, sel: string): Promise<number> {
   await openPanel(page, "downloads");

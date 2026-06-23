@@ -30,14 +30,16 @@ async function expandParamGroups(page: Page) {
     .evaluateAll((els) => els.forEach((e) => (e as HTMLElement).click()));
 }
 
-test("first run shows the idle state — no auto-loaded stencil", async ({ page }) => {
+test("first run builds the bundled sample letter (no upload needed)", async ({ page }) => {
   await page.goto("/");
-  // Only the translucent reference ball; no SVG chosen → no build, idle badge.
-  await expect(page.locator("#badge")).toHaveText("—");
-  await openPanel(page, "report");
-  await expect(page.locator("#report-body")).toContainText("Load an SVG");
+  // A brand-new visitor immediately sees a finished stencil, not an empty prompt.
+  await expect(page.locator("#badge")).toHaveText("PASS", { timeout: 40000 });
+  // The artwork is labelled a sample, not the user's own data.
+  await openPanel(page, "artwork");
+  await expect(page.locator("#svginfo")).toContainText("sample");
+  // The built default enables the download buttons.
   await openPanel(page, "downloads");
-  await expect(page.locator("#dl-stl")).toBeDisabled();
+  await expect(page.locator("#dl-stl")).toBeEnabled();
 });
 
 test("favicon is served (no 404)", async ({ page }) => {

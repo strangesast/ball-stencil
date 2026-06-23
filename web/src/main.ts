@@ -56,6 +56,13 @@ let svgText: string | null = restored?.svgText ?? null;
 let svgName = restored?.svgName ?? "stencil";
 let expandedGroups = new Set<string>(restored?.expandedGroups ?? []);
 let jobId = 0;
+// The bundled first-run sample is a placeholder, not user data: it is re-derived
+// on each empty launch, never persisted, and labelled as a sample. Any real
+// artwork (file, drop, or generated letter) clears this for the session.
+let isDefaultArtwork = false;
+// The default loads asynchronously (lazy font); if the user supplies artwork
+// before it resolves, the late default must not clobber their choice.
+let userArtworkLoaded = false;
 
 const viewer = new Viewer($("gl") as HTMLCanvasElement);
 viewer.setBallTexture(import.meta.env.BASE_URL + "ball_optx.jpg");
@@ -206,9 +213,11 @@ function requestDownload(kind: "stl" | "obj" | "ball") {
   worker.postMessage({ type: "export", jobId, kind });
 }
 function finishDownload(kind: string, buf: ArrayBuffer) {
+  // The bundled sample must not download under a name implying it is the user's.
+  const base = isDefaultArtwork ? `${svgName}_sample` : svgName;
   const map: Record<string, [string, string]> = {
-    stl: [`${svgName}_stencil.stl`, "model/stl"],
-    obj: [`${svgName}_stencil.obj`, "text/plain"],
+    stl: [`${base}_stencil.stl`, "model/stl"],
+    obj: [`${base}_stencil.obj`, "text/plain"],
     ball: ["ball_reference.stl", "model/stl"],
   };
   const [name, mime] = map[kind];
@@ -315,30 +324,70 @@ function toggleGroup(name: string, sec: HTMLElement, head: HTMLElement) {
   persist();
 }
 
-// -- file loading -----------------------------------------------------------
+// -- artwork loading --------------------------------------------------------
+/**
+ * Canonical "new artwork arrived" routine. The file picker, drag/drop, the
+ * letter generator, and the first-run default all converge here so persistence,
+ * firstMesh, showSvgInfo and build() stay consistent.
+ *
+ * `isDefault` marks the bundled sample: it is NOT persisted as user data (the
+ * SVG blob is cleared so it is re-derived, never resurrected over something the
+ * user intentionally cleared), and the info area / download name reflect that it
+ * is a sample rather than the user's own artwork.
+ */
+function loadSvgText(text: string, name: string, opts: { isDefault?: boolean } = {}) {
+  svgText = text;
+  svgName = name || "stencil";
+  isDefaultArtwork = !!opts.isDefault;
+  if (!isDefaultArtwork) userArtworkLoaded = true;
+  showSvgInfo();
+  // Persist real artwork like an upload; never store the placeholder sample.
+  saveSvg(isDefaultArtwork ? null : svgText);
+  persist();
+  firstMesh = true;
+  build();
+}
+
 function loadFile(file: File) {
-  svgName = file.name.replace(/\.svg$/i, "") || "stencil";
+  const name = file.name.replace(/\.svg$/i, "") || "stencil";
   const reader = new FileReader();
-  reader.onload = () => {
-    svgText = String(reader.result);
-    showSvgInfo();
-    saveSvg(svgText);
-    persist();
-    firstMesh = true;
-    build();
-  };
+  reader.onload = () => loadSvgText(String(reader.result), name);
   reader.readAsText(file);
 }
 
 function showSvgInfo() {
   if (!svgText) return;
+  const text = svgText;
   import("./pipeline/svg").then(({ parseSvg }) => {
-    const p = parseSvg(svgText!);
+    const p = parseSvg(text);
     const labels = p.paths.filter((x) => !x.hidden).map((x) => x.label);
+    const sample = isDefaultArtwork
+      ? `<div class="sample-note">Showing a sample — upload or generate a letter to replace it.</div>`
+      : "";
     $("svginfo").innerHTML =
-      `<b>${escapeHtml(svgName)}.svg</b> — viewBox ${p.viewBox.map((n) => +n.toFixed(2)).join(" ")}
+      `${sample}<b>${escapeHtml(svgName)}.svg</b> — viewBox ${p.viewBox.map((n) => +n.toFixed(2)).join(" ")}
        <div class="labels">paths: ${labels.map(escapeHtml).join(", ") || "(none)"}</div>`;
   });
+}
+
+// -- letter generator -------------------------------------------------------
+/** Generate a stencil from the typed character(s). On failure, show an inline
+ *  message and leave the current artwork untouched (no blank build). */
+async function generateLetter(raw: string) {
+  try {
+    const { glyphToSvg } = await import("./glyph");
+    const { svgText: text, name } = await glyphToSvg(raw);
+    setLetterError(null);
+    loadSvgText(text, name);
+  } catch (err) {
+    setLetterError(err instanceof Error ? err.message : String(err));
+  }
+}
+
+function setLetterError(msg: string | null) {
+  const el = $("letter-err");
+  if (msg) { el.textContent = msg; el.hidden = false; }
+  else { el.textContent = ""; el.hidden = true; }
 }
 
 // -- visual viewport (mobile keyboard / iOS toolbar) ------------------------
@@ -356,6 +405,19 @@ function syncViewport() {
 function init() {
   buildPanel();
   refreshBall(); // first-run: translucent reference ball, sized to diameter
+
+  // letter generator: live (debounced) on input, plus an explicit Generate button
+  const letterInput = $("letter") as HTMLInputElement;
+  let letterTimer = 0;
+  const fireLetter = () => generateLetter(letterInput.value);
+  letterInput.addEventListener("input", () => {
+    clearTimeout(letterTimer);
+    letterTimer = window.setTimeout(fireLetter, 180);
+  });
+  letterInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); clearTimeout(letterTimer); fireLetter(); }
+  });
+  $("letter-go").addEventListener("click", () => { clearTimeout(letterTimer); fireLetter(); });
 
   // file picker + drag/drop (drop anywhere on the page)
   $("pick").addEventListener("click", () => ($("file") as HTMLInputElement).click());
@@ -401,13 +463,26 @@ function init() {
 
   setBadge("busy", "—");
 
-  // restore prior session
+  // restore prior session, or seed a fresh launch with the bundled sample letter
   if (svgText !== null) {
     showSvgInfo();
     setOverlay("Restoring your last stencil…");
     build();
   } else {
-    setOverlay("Load an SVG to build a stencil.");
+    // First-run void: build the default letter through the same generator path
+    // so a brand-new visitor immediately sees a finished stencil. Re-derived on
+    // every empty launch; never persisted (see loadSvgText `isDefault`).
+    setOverlay("Building a sample stencil…");
+    import("./glyph").then(async ({ glyphToSvg, DEFAULT_LETTER }) => {
+      try {
+        const { svgText: text, name } = await glyphToSvg(DEFAULT_LETTER);
+        if (userArtworkLoaded) return; // user supplied artwork while we loaded
+        loadSvgText(text, name, { isDefault: true });
+      } catch (err) {
+        if (userArtworkLoaded) return;
+        setOverlay(err instanceof Error ? err.message : "Load an SVG to build a stencil.", true);
+      }
+    });
   }
   if (restored?.openPanel) sheets.open(restored.openPanel, { silent: true });
 

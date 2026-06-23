@@ -44,6 +44,17 @@
     <section id="panel-artwork" class="sheet" role="dialog" aria-modal="false" aria-label="Artwork" hidden>
       <div class="sheet-head"><span class="grip" aria-hidden="true"></span><h2>Artwork</h2><button class="sheet-close" type="button" aria-label="Close">×</button></div>
       <div class="sheet-body">
+        <div class="letter-gen">
+          <label for="letter">Generate from a letter</label>
+          <div class="letter-row">
+            <input type="text" id="letter" maxlength="4" inputmode="text" autocapitalize="characters"
+                   autocomplete="off" spellcheck="false" placeholder="e.g. B" aria-describedby="letter-help letter-err" />
+            <button id="letter-go" class="primary" type="button">Generate</button>
+          </div>
+          <div id="letter-help" class="hint">A character or short word (≤ 4) → a filled stencil.</div>
+          <div id="letter-err" class="err" role="alert" hidden></div>
+        </div>
+        <div class="or-divider"><span>or</span></div>
         <div id="drop" class="drop">
           <input type="file" id="file" accept=".svg,image/svg+xml" hidden />
           <button id="pick" class="primary" type="button">Choose SVG…</button>

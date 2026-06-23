@@ -38,7 +38,7 @@ export default defineConfig({
       injectManifest: {
         // Precache the whole shell. The lazy ~97 kB pipeline chunk is bigger
         // than the 2 KB-ish default cap implies, but well under this ceiling.
-        globPatterns: ["**/*.{js,css,html,ico,png,jpg,svg,woff2}"],
+        globPatterns: ["**/*.{js,css,html,ico,png,jpg,svg,woff,woff2}"],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },
       manifest: {

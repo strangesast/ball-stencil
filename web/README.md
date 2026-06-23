@@ -1,12 +1,52 @@
 # ball-stencil (browser port)
 
 A **fully client-side**, installable **PWA** that reproduces the Python
-`ball-stencil` tool. Pick a filled SVG, optionally tweak parameters, watch a
-live 3D preview of the resulting draw-through hemispherical stencil shell, and
-download it as **STL** and **OBJ** (plus a reference ball STL). SVG parsing, 2D
-geometry, sphere mapping, meshing, validation and export all run **in the
-browser** — no server, no backend, no runtime network calls. After the first
-visit it works **fully offline** and can be installed to the home screen / dock.
+`ball-stencil` tool. Type a letter or pick a filled SVG, optionally tweak
+parameters, watch a live 3D preview of the resulting draw-through hemispherical
+stencil shell, and download it as **STL** and **OBJ** (plus a reference ball
+STL). SVG parsing, 2D geometry, sphere mapping, meshing, validation and export
+all run **in the browser** — no server, no backend, no runtime network calls.
+After the first visit it works **fully offline** and can be installed to the
+home screen / dock.
+
+## Artwork: a letter, or any filled SVG
+
+Everything downstream consumes a parsed SVG, so the two front doors converge on
+one routine (`loadSvgText` in `main.ts`, also used by the file picker and
+drag-drop):
+
+- **Generate from a letter.** Type a character or short string (≤ 4) in the
+  Artwork panel and the app synthesizes a clean `<svg viewBox><path d/></svg>`
+  from a bundled font and feeds it straight into the pipeline. Builds live
+  (debounced) as you type, or on **Generate** / Enter. The letter becomes the
+  download name (`B_stencil.stl`). Counter letters (B, O, A, …) are emitted as
+  separate contours so svgio's even-odd fold carves the counter out as a hole —
+  which, being an enclosed material island, legitimately raises the free-island
+  warning (a real letter-stencil needs bridges). Whitespace / unfillable input
+  is rejected inline; it never builds blank.
+- **Glyph → SVG** lives in `src/glyph.ts`. `glyphToSvg()` lazy-loads
+  [opentype.js] + the precached font and delegates to the pure, DOM-free
+  `buildGlyphSvg(font, text)` (unit-tested against `parseSvg`/`loadArtwork`).
+  `getPath().toPathData()` gives absolute, transform-free, y-down-upright
+  outlines — the same convention the bundled Inkscape samples use, so the
+  pipeline's default `flip_v` un-mirrors a generated letter with no toggle.
+- **Bundled font.** A single heavy face, **DejaVu Sans Bold** subset to
+  printable ASCII (`public/fonts/DejaVuSans-Bold-subset.woff`, **6 KB**;
+  license alongside). Heavy/high-contrast on purpose — thin or serif strokes
+  trace poorly and produce slivers / free islands downstream. opentype.js itself
+  is a lazy ~50 KB-gzip chunk, loaded only when a letter is first generated.
+
+**First-run default.** A brand-new visitor (no restored SVG) immediately sees a
+finished sample stencil — the letter **Z**, built through the same generator
+(a solid, counter-free glyph, so first paint is a clean single-hole PASS with no
+free-island warning). The sample is a placeholder, not user data: it is
+re-derived on each empty launch, **never persisted** (so it can't resurrect over
+something the user intentionally cleared), labelled *“Showing a sample …”*, and
+its downloads carry a `_sample` tag. The instant the user uploads, drops, or
+generates anything, that replaces the sample permanently for the session and
+persists like any upload. A returning user's restored SVG is untouched.
+
+[opentype.js]: https://github.com/opentypejs/opentype.js
 
 ## Layout & interaction
 
