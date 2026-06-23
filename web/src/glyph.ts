@@ -18,6 +18,7 @@
  * that lazy-loads opentype.js + fetches the precached font, then delegates to it.
  */
 import type { Font } from "opentype.js";
+import { DEFAULT_PAINT_HEX, normalizeColor } from "./color";
 
 export interface BundledFont {
   id: string;
@@ -59,7 +60,7 @@ function glyphName(text: string): string {
  * Throws (no blank build) on empty/whitespace input or a glyph with no fillable
  * area, with a message suitable for the inline error / overlay.
  */
-export function buildGlyphSvg(font: Font, text: string): GlyphSvg {
+export function buildGlyphSvg(font: Font, text: string, fill?: string): GlyphSvg {
   const clean = text.replace(/\s+/g, " ").trim();
   if (!clean) {
     throw new Error(`Type a letter (up to ${MAX_GLYPH_CHARS} characters) to generate a stencil.`);
@@ -87,9 +88,12 @@ export function buildGlyphSvg(font: Font, text: string): GlyphSvg {
   const vb = [bb.x1 - margin, bb.y1 - margin, w + 2 * margin, h + 2 * margin]
     .map((n) => +n.toFixed(2))
     .join(" ");
+  // The chosen colour is embedded as the path fill so the design "specifies a
+  // colour" exactly like an uploaded SVG — the projection paint picks it up.
+  const color = normalizeColor(fill) ?? DEFAULT_PAINT_HEX;
   const svgText =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}">` +
-    `<path d="${d}" fill="#000000"/></svg>`;
+    `<path d="${d}" fill="${color}"/></svg>`;
   return { svgText, name: glyphName(clean) };
 }
 
@@ -120,8 +124,8 @@ function loadFont(id: string): Promise<Font> {
 /** Browser entry: lazy-load the font and synthesize the SVG for `text`. */
 export async function glyphToSvg(
   text: string,
-  opts: { fontId?: string } = {},
+  opts: { fontId?: string; fill?: string } = {},
 ): Promise<GlyphSvg> {
   const font = await loadFont(opts.fontId ?? FONTS[0].id);
-  return buildGlyphSvg(font, text);
+  return buildGlyphSvg(font, text, opts.fill);
 }

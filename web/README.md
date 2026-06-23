@@ -54,10 +54,15 @@ The 3D view is the whole canvas; controls are lightweight translucent
 (frosted-glass) overlays on top of it, not columns that shrink the view.
 
 - **Full-bleed canvas.** The WebGL2 preview fills the viewport edge to edge.
-  Orbit with one-finger drag / left-drag, pan with right-/shift-drag, zoom with
-  the wheel or a two-finger pinch on touch. The canvas is sized to the *visual*
-  viewport (`100dvh` + `visualViewport`) so iOS toolbar show/hide and the
-  on-screen keyboard don't clip or distort it.
+  The camera is a **free trackball** orbiting a fixed pivot at the ball centre
+  (the world origin), so the ball stays centred in the viewport through every
+  manipulation and there is **no pole/gimbal lock** — you can spin the full
+  circumference around any axis. Drag (one finger / left-drag) to rotate; the
+  wheel or a **two-finger gesture** zooms *and* rotates *and* twists (roll) at
+  once on touch. There is deliberately no pan (it would push the centre
+  off-screen). The canvas is sized to the *visual* viewport (`100dvh` +
+  `visualViewport`) so iOS toolbar show/hide and the on-screen keyboard don't
+  clip or distort it.
 - **Always-visible status HUD.** The PASS / FAIL badge, the triangle/holes/R_ref
   readout, and any warnings — notably the **free-island** warning (the stencil
   would physically fall apart) — float persistently over the canvas, visible
@@ -69,6 +74,63 @@ The 3D view is the whole canvas; controls are lightweight translucent
   bottom-sheets** with a backdrop, focus trap, and Escape / backdrop-tap /
   swipe-down to close. Parameter groups are collapsible `aria-expanded` sections,
   each field carrying a one-line helper description.
+
+## View: projection on the ball vs the 3D stencil
+
+The **View** panel leads with a prominent **Preview** segmented control (visually
+elevated above the secondary scene toggles) switching between two renderings of
+the same build:
+
+- **Projection (on ball)** — the **default first view**. The design is shown
+  **painted onto the simulated ball**, exactly as it looks after you slip the
+  stencil on, draw through the holes, and lift it off.
+- **3D stencil** — the opaque draw-through shell over the textured ball.
+
+Surrounding controls (all view-only — they never rebuild the mesh):
+
+- **Project onto (Top / Front / Back)** — a first-class control that rotates
+  which face of the ball the design lands on, in **both** modes (the on-ball
+  paint *and* the 3D shell rotate together). Switching is instant (a model-matrix
+  rotation) and the design reads un-mirrored from outside on every face (pure
+  rotations preserve the `flip_v` un-mirroring).
+- **Custom paint colour** — the projection paint defaults to the design's own
+  SVG `fill` (read from the artwork in the worker) and falls back to a built-in
+  ink tone when the artwork specifies none. Ticking **Custom paint colour**
+  overrides it with a chosen swatch. The letter generator has its own colour
+  swatch that is embedded as the generated glyph's `fill`, so a typed letter
+  flows in like a coloured upload.
+- **Reference ball** — when off in projection mode, the paint is drawn on a
+  **transparent sphere**: a depth-only occluder (colour writes masked) still
+  hides the far side of the decal, so the graphic reads as wrapping a clear
+  sphere rather than a flat cut-out.
+- **Spin axis (Vertical / Horizontal / Depth)** — the auto-rotate turntable axis,
+  configurable just like *Project onto*.
+
+The **default sample letter** sits inset from the cap edge (the app default
+`design_margin` is 1.3, vs the pipeline oracle's 1.06) so a fresh visitor sees
+the design occupying a comfortable fraction of the ball rather than running to
+the rim.
+
+**Parity is by construction, not approximation.** The painted decal is the same
+`cut` (through-holes) region the mesher subtracts from the disc
+(`cut = artwork ⊕ cut_separation_svg`), triangulated in the worker and lifted to
+the ball by the **same `Mapper`** the shell's vertices use —
+`mapper.direction(x, y) · (ball_radius + ε)` with a tiny outward `ε` (0.3 mm,
+plus a polygon-offset bias) so it sits just above the surface without
+z-fighting. There is no second SVG parse, texture rasterization, or re-derived
+Lambert math, so the projection can never drift from where the stencil actually
+cuts. A pipeline unit test asserts every decal vertex lies on the sphere and
+equals the shared mapper's output; an e2e test asserts the default mode is
+projection and that mode/target changes reorient without a rebuild. The decal is
+**view-only** — it is never exported and never part of mesh validation, so the
+STL/OBJ output and the golden parity tests are untouched.
+
+The render mode, projection target, spin axis, and paint-colour override all
+**persist** across reloads alongside the other panel state. Both decal buffers
+ride the existing worker `result` message as transferables and add **no new
+dependency** (the decal reuses the in-tree `delaunator`/poly2tri mesher and
+`Mapper`; the colour helpers are a ~1 KB dependency-free module); the bundle is
+otherwise unchanged.
 
 ## Persistence (resume where you left off)
 
@@ -187,7 +249,7 @@ src/
     exportmesh.ts    binary STL + OBJ writers, UV reference sphere
     pipeline.ts      orchestration (two-pass chord budget → build → validate)
   worker.ts        ← receives params, runs the pipeline, posts transferable buffers
-  viewer.ts        ← hand-rolled WebGL2: shell + translucent ball, orbit + pinch + turntable
+  viewer.ts        ← hand-rolled WebGL2: shell / on-ball projection decal + textured ball, orbit + pinch + turntable
   ui/sheet.ts      ← launcher-panel / modal bottom-sheet manager (focus trap, Esc, swipe)
   persist.ts       ← localStorage save/restore (params + SVG + panel state)
   pwa.ts           ← SW registration + update/offline/install toasts

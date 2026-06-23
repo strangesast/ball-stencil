@@ -49,6 +49,7 @@
           <div class="letter-row">
             <input type="text" id="letter" maxlength="4" inputmode="text" autocapitalize="characters"
                    autocomplete="off" spellcheck="false" placeholder="e.g. B" aria-describedby="letter-help letter-err" />
+            <input type="color" id="letter-color" value="#d92a2e" aria-label="Letter colour" title="Letter colour" />
             <button id="letter-go" class="primary" type="button">Generate</button>
           </div>
           <div id="letter-help" class="hint">A character or short word (≤ 4) → a filled stencil.</div>
@@ -89,9 +90,40 @@
       <div class="sheet-head"><span class="grip" aria-hidden="true"></span><h2>View</h2><button class="sheet-close" type="button" aria-label="Close">×</button></div>
       <div class="sheet-body">
         <div class="viewbar">
-          <label><input type="checkbox" id="t-ball" checked /> reference ball</label>
-          <label><input type="checkbox" id="t-wire" /> wireframe</label>
-          <label><input type="checkbox" id="t-spin" checked /> auto&#8209;rotate</label>
+          <!-- primary control: what the preview shows -->
+          <div class="mode-block">
+            <span class="mode-title">Preview</span>
+            <div class="seg" role="radiogroup" aria-label="Preview mode">
+              <input type="radio" name="rmode" id="m-proj" value="projection" checked />
+              <label for="m-proj">Projection<small>design on ball</small></label>
+              <input type="radio" name="rmode" id="m-stencil" value="stencil" />
+              <label for="m-stencil">3D stencil<small>draw-through shell</small></label>
+            </div>
+            <label class="proj-target">Project onto
+              <select id="proj-target">
+                <option value="top">Top</option>
+                <option value="front">Front</option>
+                <option value="back">Back</option>
+              </select>
+            </label>
+            <label class="paint-row"><input type="checkbox" id="t-paint" /> Custom paint colour
+              <input type="color" id="paint-color" value="#d92a2e" aria-label="Paint colour" />
+            </label>
+          </div>
+
+          <!-- secondary scene toggles -->
+          <div class="toggle-block">
+            <label><input type="checkbox" id="t-ball" checked /> reference ball</label>
+            <label><input type="checkbox" id="t-wire" /> wireframe</label>
+            <label><input type="checkbox" id="t-spin" checked /> auto&#8209;rotate</label>
+            <label class="proj-target">Spin axis
+              <select id="spin-axis">
+                <option value="z">Vertical</option>
+                <option value="x">Horizontal</option>
+                <option value="y">Depth</option>
+              </select>
+            </label>
+          </div>
         </div>
       </div>
     </section>

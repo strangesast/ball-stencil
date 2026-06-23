@@ -11,6 +11,12 @@
  * so we never re-serialize ~140 kB on each keystroke.
  */
 import { DEFAULT_PARAMS, Params } from "./pipeline/config";
+import { DEFAULT_PAINT_HEX } from "./color";
+
+/** A persisted colour value must be a #rrggbb string we wrote ourselves. */
+function isHex(v: unknown): v is string {
+  return typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v);
+}
 
 const META_KEY = "ball-stencil:state:v1";
 const SVG_KEY = "ball-stencil:svg:v1";
@@ -18,11 +24,23 @@ const SVG_KEY = "ball-stencil:svg:v1";
 // maliciously-huge stored blob.
 const MAX_SVG_CHARS = 2_000_000;
 
+export type RenderMode = "projection" | "stencil";
+export type ProjectionTarget = "top" | "front" | "back";
+export type SpinAxis = "z" | "x" | "y";
+
 export interface PersistMeta {
   params: Params;
   svgName: string;
   openPanel: string | null;
   expandedGroups: string[];
+  renderMode: RenderMode;
+  projectionTarget: ProjectionTarget;
+  /** World axis the auto-rotate turntable spins about. */
+  spinAxis: SpinAxis;
+  /** Explicit paint-colour override (#rrggbb), or null to follow the SVG/default. */
+  paintOverride: string | null;
+  /** Last colour chosen in the letter generator (#rrggbb). */
+  letterColor: string;
 }
 export interface RestoredState extends PersistMeta {
   svgText: string | null;
@@ -72,6 +90,16 @@ export function loadState(): RestoredState | null {
       expandedGroups: Array.isArray(o.expandedGroups)
         ? o.expandedGroups.filter((x): x is string => typeof x === "string")
         : [],
+      // Default first view is the on-ball projection (Top); a returning user's
+      // persisted choice overrides it.
+      renderMode: o.renderMode === "stencil" ? "stencil" : "projection",
+      projectionTarget:
+        o.projectionTarget === "front" || o.projectionTarget === "back"
+          ? o.projectionTarget
+          : "top",
+      spinAxis: o.spinAxis === "x" || o.spinAxis === "y" ? o.spinAxis : "z",
+      paintOverride: isHex(o.paintOverride) ? (o.paintOverride as string) : null,
+      letterColor: isHex(o.letterColor) ? (o.letterColor as string) : DEFAULT_PAINT_HEX,
     };
   } catch {
     return null; // corrupt JSON → defaults

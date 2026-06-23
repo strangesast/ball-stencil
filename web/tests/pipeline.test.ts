@@ -4,7 +4,9 @@
  * Python oracle (web/fixtures/golden.json).
  */
 import { describe, it, expect, beforeAll } from "vitest";
-import { DEFAULT_PARAMS, Params } from "../src/pipeline/config";
+import { DEFAULT_PARAMS, Params, ballRadius } from "../src/pipeline/config";
+import { DECAL_EPSILON_MM } from "../src/pipeline/meshbuild";
+import { normalizeColor } from "../src/color";
 import { parseSvg } from "../src/pipeline/svg";
 import { runPipeline } from "../src/pipeline/pipeline";
 import { writeStl, writeObj } from "../src/pipeline/exportmesh";
@@ -131,6 +133,66 @@ describe("relational sanity", () => {
     const res = runPipeline(parsed, { ...DEFAULT_PARAMS }, "splash_z.svg");
     expect(res.build.nCutRegions).toBe(1);
     expect(res.build.islands.length).toBe(1);
+  });
+});
+
+describe("projection decal parity (same cut region + same mapper as the shell)", () => {
+  for (const svg of ["splash.svg", "splash_z.svg"]) {
+    it(`${svg}: decal lies on the ball and is built by the shell's mapper`, () => {
+      const p = { ...DEFAULT_PARAMS };
+      const res = runPipeline(parseSvg(loadSvg(svg)), p, svg);
+      const { decal, mapper } = res.build;
+      const R = ballRadius(p);
+      const eps = DECAL_EPSILON_MM;
+
+      // non-empty paintable region
+      expect(decal.epsilon).toBeCloseTo(eps, 12);
+      expect(decal.faces.length).toBeGreaterThan(0);
+      const nV = decal.vertices.length / 3;
+      expect(nV).toBe(decal.planar.length);
+
+      // every decal vertex sits on the sphere at R + eps (within radius tol)
+      for (let i = 0; i < nV; i++) {
+        const x = decal.vertices[i * 3], y = decal.vertices[i * 3 + 1], z = decal.vertices[i * 3 + 2];
+        const r = Math.hypot(x, y, z);
+        expect(Math.abs(r - R)).toBeLessThanOrEqual(eps + p.radius_tolerance_mm);
+      }
+
+      // sampled vertices equal mapper.direction(planarPt) * (R + eps) for the
+      // SAME mapper the build used — proves shared-mapper parity, not a
+      // re-derivation of the Lambert math.
+      const step = Math.max(1, Math.floor(nV / 64));
+      for (let i = 0; i < nV; i += step) {
+        const [dx, dy, dz] = mapper.direction(decal.planar[i][0], decal.planar[i][1]);
+        expect(decal.vertices[i * 3]).toBeCloseTo(dx * (R + eps), 9);
+        expect(decal.vertices[i * 3 + 1]).toBeCloseTo(dy * (R + eps), 9);
+        expect(decal.vertices[i * 3 + 2]).toBeCloseTo(dz * (R + eps), 9);
+      }
+
+      // faces index valid vertices
+      for (let i = 0; i < decal.faces.length; i++) {
+        expect(decal.faces[i]).toBeGreaterThanOrEqual(0);
+        expect(decal.faces[i]).toBeLessThan(nV);
+      }
+    });
+  }
+});
+
+describe("svg fill extraction + colour normalization (projection paint source)", () => {
+  it("reads the design colour from `fill:` in style and the `fill` attribute", () => {
+    expect(parseSvg(loadSvg("splash.svg")).fill).toBe("#000000"); // style="...;fill:#000000"
+    expect(parseSvg(loadSvg("ring.svg")).fill).toBe("#000000"); // fill="#000000"
+  });
+  it("is null when no visible path specifies a colour", () => {
+    expect(parseSvg('<svg viewBox="0 0 10 10"><path d="M0 0 H10 V10 Z"/></svg>').fill).toBeNull();
+  });
+  it("normalizes shorthand/rgb/named and rejects none/unknown", () => {
+    expect(normalizeColor("#abc")).toBe("#aabbcc");
+    expect(normalizeColor("rgb(255, 0, 0)")).toBe("#ff0000");
+    expect(normalizeColor("Black")).toBe("#000000");
+    expect(normalizeColor("none")).toBeNull();
+    expect(normalizeColor("currentColor")).toBeNull();
+    expect(normalizeColor(undefined)).toBeNull();
   });
 });
 

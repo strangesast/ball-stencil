@@ -7,15 +7,21 @@
  * so the same code runs in the Web Worker and in Node tests.
  */
 
+import { normalizeColor } from "../color";
+
 export interface SvgPath {
   d: string;
   label: string; // inkscape:label -> id -> "path"
   hidden: boolean; // display:none via style or attribute
+  fill: string | null; // normalized #rrggbb fill, or null (none/unspecified)
 }
 
 export interface ParsedSvg {
   viewBox: [number, number, number, number]; // (minx, miny, w, h)
   paths: SvgPath[];
+  /** Representative design fill (first visible path with an explicit colour),
+   *  or null when the artwork specifies none. Drives the projection paint. */
+  fill: string | null;
 }
 
 const LEN_RE = /^[-+]?[0-9]*\.?[0-9]+/;
@@ -69,8 +75,14 @@ export function parseSvg(svgText: string): ParsedSvg {
     const display = attr(tag, "display");
     const hidden = style.replace(/\s+/g, "").includes("display:none") || display === "none";
     const label = attr(tag, "inkscape:label") ?? attr(tag, "id") ?? "path";
-    paths.push({ d, label, hidden });
+    // Fill: `fill:` in the style wins over the `fill` attribute (CSS precedence).
+    const styleFill = /(?:^|;)\s*fill\s*:\s*([^;]+)/i.exec(style)?.[1];
+    const fill = normalizeColor(styleFill ?? attr(tag, "fill"));
+    paths.push({ d, label, hidden, fill });
   }
 
-  return { viewBox, paths };
+  // Representative colour for the projection paint: the first visible filled path.
+  const fill = paths.find((p) => !p.hidden && p.fill)?.fill ?? null;
+
+  return { viewBox, paths, fill };
 }

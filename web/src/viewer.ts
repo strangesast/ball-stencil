@@ -32,19 +32,48 @@ function lookAt(eye: number[], center: number[], up: number[]): Mat4 {
   ]);
 }
 
+const IDENT = (): Mat4 => new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+
+/** Rotation about +Y (column-major). Maps the design pole +z to the chosen face. */
+function rotY(theta: number): Mat4 {
+  const c = Math.cos(theta), s = Math.sin(theta);
+  return new Float32Array([
+    c, 0, -s, 0,
+    0, 1, 0, 0,
+    s, 0, c, 0,
+    0, 0, 0, 1,
+  ]);
+}
+
 const cross = (a: number[], b: number[]) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const dot = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const norm = (a: number[]) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+
+/** Rotate vector v about unit axis k by angle θ (Rodrigues). The trackball
+ *  rotates its basis vectors about the *current* screen axes, which never hit a
+ *  gimbal singularity — you can spin the full circumference around any axis. */
+function rotateVec(v: number[], k: number[], theta: number): number[] {
+  const c = Math.cos(theta), s = Math.sin(theta);
+  const kv = dot(k, v);
+  const cx = k[1] * v[2] - k[2] * v[1];
+  const cy = k[2] * v[0] - k[0] * v[2];
+  const cz = k[0] * v[1] - k[1] * v[0];
+  return [
+    v[0] * c + cx * s + k[0] * kv * (1 - c),
+    v[1] * c + cy * s + k[1] * kv * (1 - c),
+    v[2] * c + cz * s + k[2] * kv * (1 - c),
+  ];
+}
 
 // -- shaders ----------------------------------------------------------------
 const VERT = `#version 300 es
 precision highp float;
 layout(location=0) in vec3 aPos;
-uniform mat4 uProj, uView;
+uniform mat4 uProj, uView, uModel;
 out vec3 vWorld;
 void main() {
-  vWorld = aPos;
-  gl_Position = uProj * uView * vec4(aPos, 1.0);
+  vWorld = (uModel * vec4(aPos, 1.0)).xyz;   // rotated to the chosen face (Top/Front/Back)
+  gl_Position = uProj * uView * vec4(vWorld, 1.0);
 }`;
 
 const FRAG = `#version 300 es
@@ -127,6 +156,17 @@ interface GpuMesh {
   nLines: number;
 }
 
+/** Which view the user sees. "projection" = paint on the ball (default first
+ *  view); "stencil" = the opaque draw-through shell over the reference ball. */
+export type RenderMode = "projection" | "stencil";
+/** Which face of the ball the design lands on. Convention (see render()):
+ *  top → pole at +z; front → pole rotated to +x (faces the default camera);
+ *  back → pole rotated to −x (far side). Pure rotations, so chirality (and the
+ *  flip_v un-mirroring) is preserved for every target. */
+export type ProjectionTarget = "top" | "front" | "back";
+/** World axis the auto-rotate turntable spins about. */
+export type SpinAxis = "z" | "x" | "y";
+
 export class Viewer {
   private gl: WebGL2RenderingContext;
   private prog: WebGLProgram;
@@ -136,18 +176,32 @@ export class Viewer {
   private texReady = false;
   private shell: GpuMesh | null = null;
   private ball: GpuMesh | null = null;
+  private decal: GpuMesh | null = null;
 
-  // camera
-  private az = 0.6;
-  private el = 0.5;
+  // camera — free trackball: `dir` points from the target to the eye, `up` is
+  // the camera's up. Both are rotated about the current screen axes on drag, so
+  // there is no pole/gimbal lock (full-circumference rotation about any axis).
+  private dir = norm([0.724, 0.495, 0.479]); // initial 3/4 view (old az≈0.6, el≈0.5)
+  private up = norm([-0.395, -0.27, 0.878]); // world +z tilted into the view plane
   private dist = 320;
-  private target = [0, 0, 40];
+  // Pivot is locked to the ball centre (the world origin, where the ball, shell
+  // and decal are all centred) so the ball stays centred in the viewport through
+  // every rotation and zoom — the standard fixed-pivot orbit ("turntable") rig.
+  // There is deliberately no pan, so nothing can push the centre off-screen.
+  private target = [0, 0, 0];
   private radiusHint = 105;
 
   // options
   showBall = true;
   wireframe = false;
   autoRotate = true;
+  /** World axis the turntable spins about (configurable, like "Project onto"). */
+  spinAxis: SpinAxis = "z";
+  /** Default first view: the design projected onto the ball (not the shell). */
+  renderMode: RenderMode = "projection";
+  projectionTarget: ProjectionTarget = "top";
+  /** Projection paint colour (RGB 0..1). Set from the SVG / letter / override. */
+  private decalColor: [number, number, number] = [0.85, 0.16, 0.18];
   private dragging = false;
   private rafPaused = false;
 
@@ -167,61 +221,68 @@ export class Viewer {
 
   private bindInput() {
     const c = this.canvas;
-    let lastX = 0, lastY = 0, mode = 0;
-    // Active touch/mouse pointers, so two-finger pinch can zoom on mobile.
+    const ROT = 0.01; // radians per pixel of drag
+    let lastX = 0, lastY = 0; // drag always orbits (no pan — keeps the ball centred)
+    // Active touch/mouse pointers, so two fingers can zoom + rotate + twist.
     const pts = new Map<number, { x: number; y: number }>();
-    let pinchDist = 0;
-    const twoFingerDist = () => {
+    // Two-finger gesture state (centroid, spread, twist angle).
+    let prevCx = 0, prevCy = 0, prevDist = 0, prevAng = 0;
+    const twoFinger = () => {
       const [a, b] = [...pts.values()];
-      return Math.hypot(a.x - b.x, a.y - b.y);
+      return {
+        cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2,
+        dist: Math.hypot(a.x - b.x, a.y - b.y),
+        ang: Math.atan2(b.y - a.y, b.x - a.x),
+      };
+    };
+    const beginTwoFinger = () => {
+      const g = twoFinger();
+      prevCx = g.cx; prevCy = g.cy; prevDist = g.dist; prevAng = g.ang;
     };
     c.addEventListener("pointerdown", (e) => {
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       c.setPointerCapture(e.pointerId);
       if (pts.size === 1) {
         this.dragging = true;
-        mode = e.button === 2 || e.shiftKey ? 2 : 1;
         lastX = e.clientX; lastY = e.clientY;
       } else if (pts.size === 2) {
-        this.dragging = false; // hand off to pinch
-        pinchDist = twoFingerDist();
+        this.dragging = false; // hand off to the two-finger gesture
+        beginTwoFinger();
       }
     });
     c.addEventListener("pointermove", (e) => {
       if (!pts.has(e.pointerId)) return;
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pts.size >= 2) {
-        // pinch-to-zoom (dist tracks the camera distance, not render math)
-        const d = twoFingerDist();
-        if (pinchDist > 0 && d > 0) {
-          this.dist = Math.max(20, Math.min(2000, this.dist * (pinchDist / d)));
+        // Two fingers do everything at once: pinch = zoom, drag = orbit,
+        // twist = roll. (Camera rotation in addition to zoom, per request.)
+        const g = twoFinger();
+        if (prevDist > 0 && g.dist > 0) {
+          this.dist = Math.max(20, Math.min(2000, this.dist * (prevDist / g.dist)));
         }
-        pinchDist = d;
+        this.orbit((g.cx - prevCx) * ROT, (g.cy - prevCy) * ROT);
+        let dA = g.ang - prevAng;
+        if (dA > Math.PI) dA -= 2 * Math.PI; else if (dA < -Math.PI) dA += 2 * Math.PI;
+        this.roll(dA);
+        prevCx = g.cx; prevCy = g.cy; prevDist = g.dist; prevAng = g.ang;
         return;
       }
       if (!this.dragging) return;
       const dx = e.clientX - lastX, dy = e.clientY - lastY;
       lastX = e.clientX; lastY = e.clientY;
-      if (mode === 1) {
-        this.az -= dx * 0.01;
-        this.el = Math.max(-1.5, Math.min(1.5, this.el + dy * 0.01));
-      } else {
-        const k = this.dist * 0.0015;
-        this.target[0] -= dx * k * Math.cos(this.az);
-        this.target[1] += dx * k * Math.sin(this.az);
-        this.target[2] += dy * k;
-      }
+      this.orbit(dx * ROT, dy * ROT);
     });
     const end = (e: PointerEvent) => {
       pts.delete(e.pointerId);
       try { c.releasePointerCapture(e.pointerId); } catch { /* not captured */ }
-      if (pts.size < 2) pinchDist = 0;
       if (pts.size === 0) this.dragging = false;
       else if (pts.size === 1) {
         // resume single-pointer orbit from the remaining finger
-        this.dragging = true; mode = 1;
+        this.dragging = true;
         const [p] = [...pts.values()];
         lastX = p.x; lastY = p.y;
+      } else if (pts.size === 2) {
+        beginTwoFinger();
       }
     };
     c.addEventListener("pointerup", end);
@@ -241,6 +302,53 @@ export class Viewer {
 
   setBall(positions: Float32Array, indices: Uint32Array, uvs?: Float32Array) {
     this.ball = this.upload(positions, indices, uvs);
+  }
+
+  /** Upload the projection decal (cut holes lifted to the ball). May be empty. */
+  setDecal(positions: Float32Array, indices: Uint32Array) {
+    this.decal = indices.length ? this.upload(positions, indices) : null;
+  }
+
+  /** Set the projection paint colour (RGB components in [0,1]). */
+  setDecalColor(rgb: [number, number, number]) {
+    this.decalColor = rgb;
+  }
+
+  /** Model matrix that rotates the design pole +z onto the chosen face. Applies
+   *  in BOTH modes (projection decal AND stencil shell) so "Project onto" is a
+   *  first-class control either way; the decal and shell share it so they stay
+   *  registered. The reference ball is unrotated. */
+  private modelMatrix(): Mat4 {
+    if (this.projectionTarget === "front") return rotY(Math.PI / 2); // +z → +x
+    if (this.projectionTarget === "back") return rotY(-Math.PI / 2); // +z → −x
+    return IDENT(); // top
+  }
+
+  /** Orthonormal screen basis: camera right and (true) up for the current dir. */
+  private basis(): { right: number[]; up: number[] } {
+    const right = norm(cross(this.up, this.dir));
+    const up = cross(this.dir, right); // re-orthogonalized true up
+    return { right, up };
+  }
+
+  /** Trackball orbit: horizontal drag spins about the screen up axis, vertical
+   *  about the screen right axis. No clamping — rotation is unbounded. */
+  private orbit(dx: number, dy: number) {
+    const { right, up } = this.basis();
+    this.dir = norm(rotateVec(rotateVec(this.dir, up, -dx), right, -dy));
+    this.up = norm(rotateVec(rotateVec(this.up, up, -dx), right, -dy));
+  }
+
+  /** Roll about the view direction (two-finger twist). */
+  private roll(theta: number) {
+    this.up = norm(rotateVec(this.up, this.dir, theta));
+  }
+
+  /** World axis the turntable spins about, for the current spinAxis setting. */
+  private spinAxisVec(): number[] {
+    if (this.spinAxis === "x") return [1, 0, 0];
+    if (this.spinAxis === "y") return [0, 1, 0];
+    return [0, 0, 1];
   }
 
   /** Load the equirectangular albedo for the textured ball (one-time GPU upload). */
@@ -273,10 +381,11 @@ export class Viewer {
     img.src = url;
   }
 
-  /** Frame the camera distance to fit the current shell radius. */
+  /** Frame the camera distance to fit the current shell radius. The pivot stays
+   *  at the ball centre (origin) so the ball is centred in the viewport. */
   fit() {
     this.dist = this.radiusHint * 3.0;
-    this.target = [0, 0, this.radiusHint * 0.35];
+    this.target = [0, 0, 0];
   }
 
   private upload(positions: Float32Array, indices: Uint32Array, uvs?: Float32Array): GpuMesh {
@@ -331,22 +440,30 @@ export class Viewer {
     gl.viewport(0, 0, w, h);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    if (this.autoRotate && !this.dragging) this.az += 0.0045;
+    // Turntable spin about the configured world axis; free trackball drag still works.
+    if (this.autoRotate && !this.dragging) {
+      const ax = this.spinAxisVec();
+      this.dir = norm(rotateVec(this.dir, ax, 0.0045));
+      this.up = norm(rotateVec(this.up, ax, 0.0045));
+    }
 
-    const ce = Math.cos(this.el), se = Math.sin(this.el);
+    const { up: trueUp } = this.basis();
     const eye = [
-      this.target[0] + this.dist * ce * Math.cos(this.az),
-      this.target[1] + this.dist * ce * Math.sin(this.az),
-      this.target[2] + this.dist * se,
+      this.target[0] + this.dist * this.dir[0],
+      this.target[1] + this.dist * this.dir[1],
+      this.target[2] + this.dist * this.dir[2],
     ];
     const proj = perspective((45 * Math.PI) / 180, w / Math.max(1, h), 1, 6000);
-    const view = lookAt(eye, this.target, [0, 0, 1]);
+    const view = lookAt(eye, this.target, trueUp);
+    const model = this.modelMatrix();
+    const projection = this.renderMode === "projection";
 
-    // shell (opaque)
-    if (this.shell) {
+    // shell (opaque) — stencil mode only; rotated with `model` (identity here).
+    if (!projection && this.shell) {
       gl.useProgram(this.prog);
       gl.uniformMatrix4fv(gl.getUniformLocation(this.prog, "uProj"), false, proj);
       gl.uniformMatrix4fv(gl.getUniformLocation(this.prog, "uView"), false, view);
+      gl.uniformMatrix4fv(gl.getUniformLocation(this.prog, "uModel"), false, model);
       gl.uniform3f(gl.getUniformLocation(this.prog, "uEye"), eye[0], eye[1], eye[2]);
       gl.bindVertexArray(this.shell.vao);
       if (this.wireframe) {
@@ -356,6 +473,7 @@ export class Viewer {
         gl.uniform3f(gl.getUniformLocation(this.lineProg, "uColor"), 0.8, 0.85, 0.9);
         gl.uniformMatrix4fv(gl.getUniformLocation(this.lineProg, "uProj"), false, proj);
         gl.uniformMatrix4fv(gl.getUniformLocation(this.lineProg, "uView"), false, view);
+        gl.uniformMatrix4fv(gl.getUniformLocation(this.lineProg, "uModel"), false, model);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.shell.lines);
         gl.drawElements(gl.LINES, this.shell.nLines, gl.UNSIGNED_INT, 0);
       } else {
@@ -367,8 +485,12 @@ export class Viewer {
       gl.bindVertexArray(null);
     }
 
-    // textured reference ball (opaque, lit, depth-tested behind the shell)
-    if (this.ball && this.showBall && this.texReady) {
+    // Reference ball. When the toggle is on, the textured, lit sphere is drawn
+    // (both modes). When it is OFF in projection mode, the ball is instead drawn
+    // as a *transparent* sphere — a depth-only pass (colour writes masked) that
+    // still occludes the far side of the decal, so the paint reads as sitting on
+    // a clear sphere instead of an unoccluded flat cut-out.
+    if (this.ball && this.texReady && this.showBall) {
       gl.useProgram(this.texProg);
       gl.uniformMatrix4fv(gl.getUniformLocation(this.texProg, "uProj"), false, proj);
       gl.uniformMatrix4fv(gl.getUniformLocation(this.texProg, "uView"), false, view);
@@ -379,6 +501,38 @@ export class Viewer {
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ball.tris);
       gl.drawElements(gl.TRIANGLES, this.ball.nTris, gl.UNSIGNED_INT, 0);
       gl.bindVertexArray(null);
+    } else if (projection && this.ball) {
+      // invisible occluder: write depth only, no colour
+      gl.useProgram(this.texProg);
+      gl.uniformMatrix4fv(gl.getUniformLocation(this.texProg, "uProj"), false, proj);
+      gl.uniformMatrix4fv(gl.getUniformLocation(this.texProg, "uView"), false, view);
+      gl.colorMask(false, false, false, false);
+      gl.bindVertexArray(this.ball.vao);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ball.tris);
+      gl.drawElements(gl.TRIANGLES, this.ball.nTris, gl.UNSIGNED_INT, 0);
+      gl.bindVertexArray(null);
+      gl.colorMask(true, true, true, true);
+    }
+
+    // projection decal — the paint on the ball. Drawn last, in a strong ink
+    // tone, with a polygon-offset pull toward the camera (on top of the outward
+    // epsilon baked into the geometry) so it never z-fights the sphere.
+    if (projection && this.decal) {
+      gl.useProgram(this.prog);
+      gl.uniformMatrix4fv(gl.getUniformLocation(this.prog, "uProj"), false, proj);
+      gl.uniformMatrix4fv(gl.getUniformLocation(this.prog, "uView"), false, view);
+      gl.uniformMatrix4fv(gl.getUniformLocation(this.prog, "uModel"), false, model);
+      gl.uniform3f(gl.getUniformLocation(this.prog, "uEye"), eye[0], eye[1], eye[2]);
+      gl.uniform3f(gl.getUniformLocation(this.prog, "uColor"),
+        this.decalColor[0], this.decalColor[1], this.decalColor[2]);
+      gl.uniform1f(gl.getUniformLocation(this.prog, "uAlpha"), 1.0);
+      gl.enable(gl.POLYGON_OFFSET_FILL);
+      gl.polygonOffset(-1.0, -1.0);
+      gl.bindVertexArray(this.decal.vao);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.decal.tris);
+      gl.drawElements(gl.TRIANGLES, this.decal.nTris, gl.UNSIGNED_INT, 0);
+      gl.bindVertexArray(null);
+      gl.disable(gl.POLYGON_OFFSET_FILL);
     }
   }
 }

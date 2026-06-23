@@ -14,13 +14,30 @@ import { SweepContext } from "poly2tri";
 import type { Paths64 } from "clipper2-js";
 import { Clip, Part, partArea, partCentroid, PipIndex, BoundaryDist } from "./clip";
 import { Mapper } from "./mapping";
-import { Params, capAngleRad, innerRadius, outerRadius } from "./config";
+import { Params, capAngleRad, innerRadius, outerRadius, ballRadius } from "./config";
 
 export interface Mesh {
   vertices: Float64Array; // (V*3)
   faces: Int32Array; // (F*3)
   nPlanar: number; // outer verts [0:n], inner verts [n:2n]
 }
+
+/**
+ * "Paint projected onto the ball" preview surface. It is the SAME `cut`
+ * (through-holes) region the shell subtracts from the disc, triangulated in the
+ * plane and lifted to the ball by the SAME `Mapper` the shell uses — so it is
+ * congruent with the cut holes by construction, not by re-deriving the SVG or
+ * the Lambert math. View-only: never exported, never validated.
+ */
+export interface DecalMesh {
+  vertices: Float64Array; // (V*3) on the sphere at ballRadius + epsilon
+  faces: Int32Array; // (F*3)
+  planar: number[][]; // planar source point per vertex (vertices[i] = dir(planar[i])*(R+eps))
+  epsilon: number; // outward offset (mm) used in the lift
+}
+
+/** Tiny outward offset so the decal renders just above the ball, no z-fight. */
+export const DECAL_EPSILON_MM = 0.3;
 
 export interface BuildResult {
   mesh: Mesh;
@@ -32,6 +49,7 @@ export interface BuildResult {
   spacingSvg: number;
   islands: number[]; // on-sphere area (mm^2) per component, descending
   nCutRegions: number;
+  decal: DecalMesh; // on-ball projection of the cut holes (view-only)
 }
 
 // -- helpers ----------------------------------------------------------------
@@ -414,6 +432,81 @@ function triangulateConstrained(
   return { triIdx, planar };
 }
 
+// -- decal (on-ball projection of the cut holes) ----------------------------
+
+/**
+ * Triangulate an arbitrary planar region the same way the shell triangulates the
+ * material: with the build's strategy, keeping interior triangles. Used to mesh
+ * the `cut` (holes) region for the projection preview. Robust: returns null on
+ * an empty / degenerate region rather than throwing (the decal is view-only and
+ * must never break a valid stencil build).
+ */
+function triangulateRegion(
+  region: Paths64,
+  p: Params,
+  spacing: number,
+  bndTol: number,
+  clip: Clip,
+): { triIdx: number[][]; planar: number[][] } | null {
+  if (clip.isEmpty(region)) return null;
+  try {
+    if (p.mesh_strategy === "constrained") {
+      return triangulateConstrained(region, spacing, bndTol, clip);
+    }
+    return triangulateCentroid(region, clip.toRings(region), p, spacing, clip);
+  } catch {
+    // A degenerate cut region (e.g. collapsed after offset) can defeat the
+    // constrained mesher; fall back to the always-robust centroid mesher, and
+    // if even that fails just yield no decal — the shell is unaffected.
+    try {
+      return triangulateCentroid(region, clip.toRings(region), p, spacing, clip);
+    } catch {
+      return null;
+    }
+  }
+}
+
+/**
+ * Build the projection decal: triangulate the `cut` region and lift every vertex
+ * to the ball with `mapper.direction(x,y) * (ballRadius + epsilon)` — the same
+ * mapper the shell uses, so the painted preview equals the cut holes exactly.
+ */
+function buildDecal(
+  cut: Paths64,
+  mapper: Mapper,
+  p: Params,
+  spacing: number,
+  bndTol: number,
+  clip: Clip,
+): DecalMesh {
+  const eps = DECAL_EPSILON_MM;
+  const empty: DecalMesh = {
+    vertices: new Float64Array(0),
+    faces: new Int32Array(0),
+    planar: [],
+    epsilon: eps,
+  };
+  const tri = triangulateRegion(cut, p, spacing, bndTol, clip);
+  if (!tri) return empty;
+  const { triIdx, planar } = tri;
+  const r = ballRadius(p) + eps;
+  const n = planar.length;
+  const vertices = new Float64Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const [dx, dy, dz] = mapper.direction(planar[i][0], planar[i][1]);
+    vertices[i * 3] = dx * r;
+    vertices[i * 3 + 1] = dy * r;
+    vertices[i * 3 + 2] = dz * r;
+  }
+  const faces = new Int32Array(triIdx.length * 3);
+  for (let i = 0; i < triIdx.length; i++) {
+    faces[i * 3] = triIdx[i][0];
+    faces[i * 3 + 1] = triIdx[i][1];
+    faces[i * 3 + 2] = triIdx[i][2];
+  }
+  return { vertices, faces, planar, epsilon: eps };
+}
+
 // -- pinch-vertex splitting (port of _split_pinch_vertices) -----------------
 
 function splitPinchVertices(tris: number[][], planar: number[][]): [number[][], number[][]] {
@@ -692,6 +785,10 @@ export function buildShell(
   const islands = componentAreas(material, mapper, outerR, clip);
   const nCut = countHoles(material, clip);
 
+  // Projection preview: the SAME `cut` region + the SAME `mapper`, lifted to the
+  // ball. Built after the validated shell so it can never perturb or fail it.
+  const decal = buildDecal(cut, mapper, p, spacing, bndTol, clip);
+
   return {
     mesh: { vertices, faces: facesArr, nPlanar: n },
     material,
@@ -702,5 +799,6 @@ export function buildShell(
     spacingSvg: spacing,
     islands,
     nCutRegions: nCut,
+    decal,
   };
 }

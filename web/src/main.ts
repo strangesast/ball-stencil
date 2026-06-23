@@ -9,7 +9,8 @@ import { UI_DEFAULT_PARAMS, Params, validateParams, ballRadius } from "./pipelin
 import { uvSphereTextured } from "./pipeline/exportmesh";
 import { Viewer } from "./viewer";
 import { Sheets } from "./ui/sheet";
-import { loadState, saveMeta, saveSvg } from "./persist";
+import { loadState, saveMeta, saveSvg, RenderMode, ProjectionTarget, SpinAxis } from "./persist";
+import { DEFAULT_PAINT_HEX, hexToRgb } from "./color";
 import { initPwa } from "./pwa";
 import type { MeshReport } from "./pipeline/meshcheck";
 import type { BuildInfo } from "./worker";
@@ -55,6 +56,17 @@ let params: Params = restored ? { ...restored.params } : { ...UI_DEFAULT_PARAMS 
 let svgText: string | null = restored?.svgText ?? null;
 let svgName = restored?.svgName ?? "stencil";
 let expandedGroups = new Set<string>(restored?.expandedGroups ?? []);
+// View mode (default first view = the on-ball projection); restored if the user
+// has been here before. These drive only rendering — never a worker rebuild.
+let renderMode: RenderMode = restored?.renderMode ?? "projection";
+let projectionTarget: ProjectionTarget = restored?.projectionTarget ?? "top";
+let spinAxis: SpinAxis = restored?.spinAxis ?? "z";
+// Paint colour: an explicit override wins; otherwise the design's own SVG fill;
+// otherwise the configured default. `letterColor` is the swatch the generator
+// embeds into a typed letter (which then flows in as the SVG's fill).
+let paintOverride: string | null = restored?.paintOverride ?? null;
+let letterColor: string = restored?.letterColor ?? DEFAULT_PAINT_HEX;
+let lastSvgColor: string | null = null;
 let jobId = 0;
 // The bundled first-run sample is a placeholder, not user data: it is re-derived
 // on each empty launch, never persisted, and labelled as a sample. Any real
@@ -65,7 +77,19 @@ let isDefaultArtwork = false;
 let userArtworkLoaded = false;
 
 const viewer = new Viewer($("gl") as HTMLCanvasElement);
+viewer.renderMode = renderMode;
+viewer.projectionTarget = projectionTarget;
+viewer.spinAxis = spinAxis;
 viewer.setBallTexture(import.meta.env.BASE_URL + "ball_optx.jpg");
+
+/** Colour the projection paint actually uses, in priority order. */
+function resolvedPaint(): string {
+  return paintOverride ?? lastSvgColor ?? DEFAULT_PAINT_HEX;
+}
+function applyPaint() {
+  viewer.setDecalColor(hexToRgb(resolvedPaint()));
+}
+applyPaint();
 const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
 const sheets = new Sheets();
 
@@ -76,6 +100,11 @@ function persist() {
     svgName,
     openPanel: sheets.current(),
     expandedGroups: [...expandedGroups],
+    renderMode,
+    projectionTarget,
+    spinAxis,
+    paintOverride,
+    letterColor,
   });
 }
 
@@ -85,7 +114,9 @@ worker.onmessage = (e: MessageEvent) => {
   if (m.type === "result") {
     if (m.jobId !== jobId) return; // stale
     onResult(m.report as MeshReport, m.ok as boolean, m.info as BuildInfo,
-      new Float32Array(m.positions), new Uint32Array(m.indices), m.ballRadius as number);
+      new Float32Array(m.positions), new Uint32Array(m.indices),
+      new Float32Array(m.decalPositions), new Uint32Array(m.decalIndices),
+      m.ballRadius as number);
   } else if (m.type === "error") {
     // jobId === -1 is an escaped/global worker error not tied to a build; always
     // surface it. Otherwise drop errors from superseded builds.
@@ -134,12 +165,43 @@ function scheduleBuild() {
 }
 
 let firstMesh = true;
-function onResult(report: MeshReport, ok: boolean, info: BuildInfo, pos: Float32Array, idx: Uint32Array, _ballR: number) {
+// Base (mode-independent) summary of the latest successful build, so the HUD can
+// be re-composed with the current view mode when the user toggles mode/target
+// (which does not trigger a rebuild).
+let lastBuildSummary: string | null = null;
+let lastDecalTris = 0;
+function onResult(report: MeshReport, ok: boolean, info: BuildInfo, pos: Float32Array, idx: Uint32Array,
+                  decalPos: Float32Array, decalIdx: Uint32Array, _ballR: number) {
   viewer.setShell(pos, idx, info.outerRadius);
+  viewer.setDecal(decalPos, decalIdx);
+  lastDecalTris = info.decalTris;
+  // Pick up the design's own colour and repaint (unless the user overrode it).
+  lastSvgColor = info.svgColor;
+  applyPaint();
+  if (!paintOverride) {
+    const pc = $("paint-color") as HTMLInputElement | null;
+    if (pc) pc.value = resolvedPaint();
+  }
   if (firstMesh) { viewer.fit(); firstMesh = false; }
   renderReport(report, ok, info);
-  setOverlay(`${report.nFaces.toLocaleString()} triangles · holes ${info.nCutRegions} · R_ref ${info.rRef.toFixed(1)} svg`);
+  lastBuildSummary = `${report.nFaces.toLocaleString()} triangles · holes ${info.nCutRegions} · R_ref ${info.rRef.toFixed(1)} svg`;
+  refreshViewOverlay();
   enableDownloads(true);
+  // Test hooks: count rebuilds (a mode/target/colour switch must NOT increment)
+  // and expose the parsed design colour.
+  const w = window as unknown as { __resultCount?: number; __svgColor?: string | null };
+  w.__resultCount = (w.__resultCount ?? 0) + 1;
+  w.__svgColor = info.svgColor;
+}
+
+/** Append the current view mode to the build summary in the HUD overlay. The
+ *  PASS/FAIL report (about the mesh) is independent of the view mode. */
+function refreshViewOverlay() {
+  if (lastBuildSummary === null) return;
+  const mode = renderMode === "projection" ? "projection" : "3D stencil";
+  let suffix = ` · ${mode} — ${projectionTarget}`;
+  if (renderMode === "projection" && lastDecalTris === 0) suffix += " (nothing to paint)";
+  setOverlay(lastBuildSummary + suffix);
 }
 
 // -- status HUD + report rendering ------------------------------------------
@@ -376,7 +438,7 @@ function showSvgInfo() {
 async function generateLetter(raw: string) {
   try {
     const { glyphToSvg } = await import("./glyph");
-    const { svgText: text, name } = await glyphToSvg(raw);
+    const { svgText: text, name } = await glyphToSvg(raw, { fill: letterColor });
     setLetterError(null);
     loadSvgText(text, name);
   } catch (err) {
@@ -453,6 +515,63 @@ function init() {
   ($("t-wire") as HTMLInputElement).addEventListener("change", (e) => { viewer.wireframe = (e.target as HTMLInputElement).checked; });
   ($("t-spin") as HTMLInputElement).addEventListener("change", (e) => { viewer.autoRotate = (e.target as HTMLInputElement).checked; });
 
+  // auto-rotate spin axis (configurable like "Project onto")
+  const spinSel = $("spin-axis") as HTMLSelectElement;
+  spinSel.value = spinAxis;
+  spinSel.addEventListener("change", () => {
+    spinAxis = spinSel.value as SpinAxis;
+    viewer.spinAxis = spinAxis;
+    persist();
+  });
+
+  // render-mode + projection-target — view-only, never rebuild the mesh.
+  // "Project onto" applies to BOTH the on-ball projection and the 3D stencil
+  // shell, so it stays enabled in either mode.
+  const projSel = $("proj-target") as HTMLSelectElement;
+  ($("m-proj") as HTMLInputElement).checked = renderMode === "projection";
+  ($("m-stencil") as HTMLInputElement).checked = renderMode === "stencil";
+  projSel.value = projectionTarget;
+  const onMode = (m: RenderMode) => {
+    renderMode = m;
+    viewer.renderMode = m;
+    refreshViewOverlay();
+    persist();
+  };
+  ($("m-proj") as HTMLInputElement).addEventListener("change", () => onMode("projection"));
+  ($("m-stencil") as HTMLInputElement).addEventListener("change", () => onMode("stencil"));
+  projSel.addEventListener("change", () => {
+    projectionTarget = projSel.value as ProjectionTarget;
+    viewer.projectionTarget = projectionTarget;
+    refreshViewOverlay();
+    persist();
+  });
+
+  // paint colour: a checkbox to override, plus the swatch. Unchecked = follow the
+  // design's SVG fill (or the default); the swatch then just shows what's in use.
+  const paintChk = $("t-paint") as HTMLInputElement;
+  const paintColor = $("paint-color") as HTMLInputElement;
+  paintChk.checked = paintOverride !== null;
+  paintColor.value = paintOverride ?? resolvedPaint();
+  paintColor.disabled = paintOverride === null;
+  paintChk.addEventListener("change", () => {
+    paintColor.disabled = !paintChk.checked;
+    paintOverride = paintChk.checked ? paintColor.value : null;
+    if (!paintChk.checked) paintColor.value = resolvedPaint();
+    applyPaint();
+    persist();
+  });
+  paintColor.addEventListener("input", () => {
+    if (!paintChk.checked) return;
+    paintOverride = paintColor.value;
+    applyPaint();
+    persist();
+  });
+
+  // letter generator colour swatch
+  const letterColorInput = $("letter-color") as HTMLInputElement;
+  letterColorInput.value = letterColor;
+  letterColorInput.addEventListener("input", () => { letterColor = letterColorInput.value; persist(); });
+
   // persist which panel is open
   sheets.onChange(() => persist());
 
@@ -475,7 +594,7 @@ function init() {
     setOverlay("Building a sample stencil…");
     import("./glyph").then(async ({ glyphToSvg, DEFAULT_LETTER }) => {
       try {
-        const { svgText: text, name } = await glyphToSvg(DEFAULT_LETTER);
+        const { svgText: text, name } = await glyphToSvg(DEFAULT_LETTER, { fill: letterColor });
         if (userArtworkLoaded) return; // user supplied artwork while we loaded
         loadSvgText(text, name, { isDefault: true });
       } catch (err) {

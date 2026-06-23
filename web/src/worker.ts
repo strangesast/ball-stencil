@@ -36,6 +36,8 @@ export interface BuildInfo {
   labels: string[];
   viewBox: [number, number, number, number];
   nPlanar: number;
+  decalTris: number; // triangle count of the projection decal (0 = nothing to paint)
+  svgColor: string | null; // design's own fill (#rrggbb), or null if unspecified
 }
 
 // Lazily-imported pipeline (keeps Clipper2 + Delaunator out of the main bundle).
@@ -92,6 +94,15 @@ async function handleBuild(msg: BuildMsg) {
     const indices = new Uint32Array(f.length);
     for (let i = 0; i < f.length; i++) indices[i] = f[i];
 
+    // projection decal buffers (also transferable). Built from the same cut
+    // region + mapper as the shell, so it is congruent with the holes.
+    const dv = res.build.decal.vertices;
+    const df = res.build.decal.faces;
+    const decalPositions = new Float32Array(dv.length);
+    for (let i = 0; i < dv.length; i++) decalPositions[i] = dv[i];
+    const decalIndices = new Uint32Array(df.length);
+    for (let i = 0; i < df.length; i++) decalIndices[i] = df[i];
+
     const info: BuildInfo = {
       rRef: res.build.rRef,
       innerRadius: cfgMod!.innerRadius(msg.params),
@@ -104,6 +115,8 @@ async function handleBuild(msg: BuildMsg) {
       labels: res.labels,
       viewBox: res.viewBox,
       nPlanar: res.build.mesh.nPlanar,
+      decalTris: decalIndices.length / 3,
+      svgColor: parsed.fill,
     };
 
     (self as DedicatedWorkerGlobalScope).postMessage(
@@ -115,9 +128,11 @@ async function handleBuild(msg: BuildMsg) {
         info,
         positions: positions.buffer,
         indices: indices.buffer,
+        decalPositions: decalPositions.buffer,
+        decalIndices: decalIndices.buffer,
         ballRadius: last.ballRadius,
       },
-      [positions.buffer, indices.buffer],
+      [positions.buffer, indices.buffer, decalPositions.buffer, decalIndices.buffer],
     );
   } catch (err) {
     if (msg.jobId !== currentJob) return;

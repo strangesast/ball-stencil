@@ -70,6 +70,11 @@ describe("buildGlyphSvg → parseSvg", () => {
     expect(svgText).not.toMatch(/<text\b/);
   });
 
+  it("embeds the requested fill colour (and defaults to the paint default)", () => {
+    expect(parseSvg(buildGlyphSvg(font, "Z", "#1133cc").svgText).fill).toBe("#1133cc");
+    expect(parseSvg(buildGlyphSvg(font, "Z").svgText).fill).toBe("#d92a2e");
+  });
+
   it("rejects whitespace / empty input instead of building blank", () => {
     expect(() => buildGlyphSvg(font, "")).toThrow(/Type a letter/);
     expect(() => buildGlyphSvg(font, "   ")).toThrow(/Type a letter/);
