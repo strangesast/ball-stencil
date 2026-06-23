@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OPTX photo register — pose &amp; panel alignment</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #14161a; color: #d8dce2;
+    font: 13px/1.4 system-ui, sans-serif; }
+  #app { display: grid; grid-template-columns: 1fr 320px; height: 100vh; }
+  #stage { position: relative; overflow: hidden; background:
+    repeating-conic-gradient(#1b1e24 0% 25%, #181b20 0% 50%) 50% / 28px 28px; }
+  #gizmo { position: absolute; right: 10px; bottom: 10px;
+    width: 176px; height: 138px; background: rgba(14, 16, 20, 0.62);
+    border: 1px solid #2a2e36; border-radius: 8px; pointer-events: none;
+    font: 9px system-ui, sans-serif; }
+  #svg { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  #svg.panning { cursor: grabbing; }
+  #panel { background: #1a1d22; border-left: 1px solid #2a2e36; overflow-y: auto;
+    padding: 12px 14px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+    color: #8b93a1; margin: 18px 0 8px; }
+  h2:first-child { margin-top: 4px; }
+  label { display: grid; grid-template-columns: 64px 1fr 52px; align-items: center;
+    gap: 6px; margin: 4px 0; }
+  label > span:first-child { color: #9aa3b2; }
+  input[type=range] { width: 100%; }
+  input[type=number] { width: 52px; background: #0f1115; color: #d8dce2;
+    border: 1px solid #333; border-radius: 4px; padding: 2px 4px; font: inherit; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+  button { background: #2a2f38; color: #e3e7ee; border: 1px solid #3a404a;
+    border-radius: 5px; padding: 6px 10px; cursor: pointer; font: inherit; }
+  button:hover { background: #343b46; }
+  button.primary { background: #2f5d8a; border-color: #3b6fa3; }
+  button.active { background: #3b6fa3; border-color: #5a8fc4; }
+  .photos { display: flex; flex-wrap: wrap; gap: 4px; }
+  .photos button { padding: 4px 8px; font-size: 12px; }
+  .photos button.done::after { content: " ✓"; color: #6fcf83; }
+  .check { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+  .check input { margin: 0; }
+  .hint { color: #6b7280; font-size: 11px; margin: 8px 0; }
+  textarea { width: 100%; height: 90px; background: #0f1115; color: #aeb6c2;
+    border: 1px solid #333; border-radius: 4px; font: 11px/1.3 ui-monospace, monospace; }
+  .legend { color: #717986; font-size: 11px; line-height: 1.6; }
+  kbd { background: #0f1115; border: 1px solid #333; border-radius: 3px;
+    padding: 0 4px; font: 11px ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <svg id="svg" viewBox="0 0 1200 1200" preserveAspectRatio="xMidYMid meet">
+      <image id="bg" x="0" y="0" width="1200" height="1200" />
+      <g id="overlay"></g>
+    </svg>
+    <svg id="gizmo" width="176" height="138" viewBox="0 0 176 138"></svg>
+  </div>
+
+  <div id="panel">
+    <h2>Photos</h2>
+    <div class="row">
+      <button id="loadSamples">Load ball_photos/</button>
+      <button id="loadFiles">Load files…</button>
+      <input id="fileInput" type="file" accept="image/*" multiple hidden />
+    </div>
+    <div id="photoList" class="photos"></div>
+
+    <h2>Ball pose <span style="color:#6b7280;font-weight:400;text-transform:none">(per photo)</span></h2>
+    <label><span>center x</span><input id="cx-r" type="range" min="0" max="1200" step="1"><input id="cx" type="number"></label>
+    <label><span>center y</span><input id="cy-r" type="range" min="0" max="1200" step="1"><input id="cy" type="number"></label>
+    <label><span>radius</span><input id="radius-r" type="range" min="10" max="1200" step="1"><input id="radius" type="number"></label>
+    <p class="hint" style="margin:6px 0 2px">Orientation: <b>drag</b> to rotate, <b>shift-drag</b> to twist,
+      <b>arrows/[ ]</b> to nudge (hold shift = fine). Snap to a named face, then fine-tune:</p>
+    <div class="photos" id="snaprow">
+      <button data-snap="FRONT">FRONT</button>
+      <button data-snap="BACK">BACK</button>
+      <button data-snap="SIDE 1">SIDE 1</button>
+      <button data-snap="SIDE 2">SIDE 2</button>
+      <button data-snap="TOP">TOP</button>
+      <button data-snap="VALVE">VALVE</button>
+    </div>
+    <div class="row">
+      <button id="autofit">Auto-fit circle</button>
+      <button id="resetPose">Reset pose</button>
+    </div>
+
+    <h2>Panel model <span style="color:#6b7280;font-weight:400;text-transform:none">(shared)</span></h2>
+    <p class="hint" style="margin-top:2px">18-panel cube cage: 6 faces × 3 strips, adjacent faces perpendicular.</p>
+    <label><span>strip frac</span><input id="strip-r" type="range" min="0.1" max="0.9" step="0.005"><input id="strip" type="number"></label>
+    <label><span>length</span><input id="width-r" type="range" min="0.4" max="2.5" step="0.01"><input id="width" type="number"></label>
+    <div class="check"><input id="weave" type="checkbox"><label for="weave" style="display:inline">weave (swap chirality)</label></div>
+    <div class="check"><input id="showGrat" type="checkbox" checked><label for="showGrat" style="display:inline">graticule (lon/lat 30°)</label></div>
+    <div class="check"><input id="showPanels" type="checkbox" checked><label for="showPanels" style="display:inline">panel geometry</label></div>
+    <div class="check"><input id="fillPanels" type="checkbox" checked><label for="fillPanels" style="display:inline">panel fills</label></div>
+    <div class="check"><input id="showBack" type="checkbox" checked><label for="showBack" style="display:inline">back-face (dashed)</label></div>
+    <label><span>img opacity</span><input id="imgop-r" type="range" min="0" max="1" step="0.05" value="1"><input id="imgop" type="number" value="1"></label>
+
+    <h2>Config</h2>
+    <div class="row">
+      <button id="save" class="primary">Save this photo</button>
+      <button id="export">Export JSON</button>
+      <button id="import">Import…</button>
+      <input id="importInput" type="file" accept="application/json" hidden />
+    </div>
+    <textarea id="json" spellcheck="false" placeholder="exported config appears here"></textarea>
+
+    <h2>Controls</h2>
+    <div class="legend">
+      <kbd>L-drag</kbd> rotate · <kbd>Shift+L-drag</kbd> twist · <kbd>← ↑ → ↓ [ ]</kbd> nudge<br>
+      <kbd>R-drag</kbd> move center · <kbd>Wheel</kbd> radius<br>
+      <kbd>Space/Mid-drag</kbd> pan view · <kbd>Ctrl+Wheel</kbd> zoom view
+    </div>
+    <p class="hint">Match the white silhouette circle to the ball, snap to the face this photo shows
+      (watch the gizmo's “facing” readout), then drag/nudge until the projected panel cage rides the
+      real grooves. Pixel coords are in the image's native resolution.</p>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const svg = $("svg"), bg = $("bg"), overlay = $("overlay");
+const D2R = Math.PI / 180;
+
+// ---- state ---------------------------------------------------------------
+const POSE_KEYS = ["cx", "cy", "radius"];
+const MODEL_KEYS = ["strip", "width"];
+// orientation is a unit quaternion q=[x,y,z,w] (body→camera) — no gimbal lock.
+const defaultPose = () => ({ cx: 600, cy: 600, radius: 560, q: [0, 0, 0, 1] });
+let model = { strip: 0.333, width: 1.0, weave: false };
+let store = load() || { model: { ...model }, photos: {} };
+for (const k of [...MODEL_KEYS, "weave"]) if (store.model && store.model[k] !== undefined) model[k] = store.model[k];
+const photos = {};        // name -> { url, w, h }
+let current = null;       // active photo name
+let pose = defaultPose();
+let view = { x: 0, y: 0, w: 1200, h: 1200 }; // svg viewBox
+
+// ---- persistence ---------------------------------------------------------
+function load() { try { return JSON.parse(localStorage.optxReg || ""); } catch { return null; } }
+function persist() {
+  store.model = { ...model };
+  localStorage.optxReg = JSON.stringify(store);
+}
+
+// ---- quaternions [x,y,z,w] -----------------------------------------------
+const qNorm = (q) => { const l = Math.hypot(q[0], q[1], q[2], q[3]) || 1; return [q[0] / l, q[1] / l, q[2] / l, q[3] / l]; };
+const qMul = (a, b) => [
+  a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+  a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+  a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+  a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+];
+const qAxis = (ax, deg) => { const h = deg * D2R / 2, s = Math.sin(h); return [ax[0] * s, ax[1] * s, ax[2] * s, Math.cos(h)]; };
+const qRot = (q, v) => {
+  const tx = 2 * (q[1] * v[2] - q[2] * v[1]), ty = 2 * (q[2] * v[0] - q[0] * v[2]), tz = 2 * (q[0] * v[1] - q[1] * v[0]);
+  return [
+    v[0] + q[3] * tx + (q[1] * tz - q[2] * ty),
+    v[1] + q[3] * ty + (q[2] * tx - q[0] * tz),
+    v[2] + q[3] * tz + (q[0] * ty - q[1] * tx),
+  ];
+};
+// legacy ZXZ Euler (yaw·Z → pitch·X → roll·Z) → quaternion, for old configs
+const eulerToQ = (yaw, pitch, roll) =>
+  qNorm(qMul(qAxis([0, 0, 1], roll), qMul(qAxis([1, 0, 0], pitch), qAxis([0, 0, 1], yaw))));
+
+// ---- math: project a unit sphere point under the current pose ------------
+// p=[x,y,z]. Orientation q maps body→camera; camera looks down -Z, +z_cam faces
+// the viewer. q=identity puts +Z (TOP) at the camera, valve (-Z) at the back.
+function rotate(p) { return qRot(pose.q, p); }
+function project(p) {
+  const [x3, y3, z3] = rotate(p);
+  return {
+    sx: pose.cx + pose.radius * x3,
+    sy: pose.cy - pose.radius * y3,
+    front: z3 > 0,
+  };
+}
+function sphPoint(lonDeg, latDeg) {
+  const lo = lonDeg * D2R, la = latDeg * D2R, c = Math.cos(la);
+  return [c * Math.cos(lo), c * Math.sin(lo), Math.sin(la)];
+}
+
+// ---- build SVG path strings (split front vs back) ------------------------
+function polyline(points) {
+  // points: [{lon,lat}], returns {front, back} path-d strings
+  let front = "", back = "", prevFront = null;
+  for (const pt of points) {
+    const pr = project(sphPoint(pt.lon, pt.lat));
+    const seg = (pr.front ? front : back) === "" ||
+      (pr.front ? prevFront !== true : prevFront !== false);
+    const cmd = seg ? "M" : "L";
+    if (pr.front) front += `${cmd}${pr.sx.toFixed(1)} ${pr.sy.toFixed(1)} `;
+    else back += `${cmd}${pr.sx.toFixed(1)} ${pr.sy.toFixed(1)} `;
+    prevFront = pr.front;
+  }
+  return { front, back };
+}
+function curve(genFn, steps = 96) {
+  const pts = [];
+  for (let i = 0; i <= steps; i++) pts.push(genFn(i / steps));
+  return polyline(pts);
+}
+
+function render() {
+  let g = "";
+  const stroke = (d, color, dash, w) => d
+    ? `<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" ${dash ? `stroke-dasharray="${dash}"` : ""} vector-effect="non-scaling-stroke"/>`
+    : "";
+  const showBack = $("showBack").checked;
+
+  // silhouette circle (orientation-independent)
+  g += `<circle cx="${pose.cx}" cy="${pose.cy}" r="${pose.radius}" fill="none"
+        stroke="#ffffff" stroke-width="1.5" vector-effect="non-scaling-stroke"
+        stroke-opacity="0.85"/>`;
+  g += `<circle cx="${pose.cx}" cy="${pose.cy}" r="3" fill="#ffffff"/>`;
+
+  // graticule
+  if ($("showGrat").checked) {
+    for (let lon = -180; lon < 180; lon += 30) {
+      const { front, back } = curve((t) => ({ lon, lat: -90 + 180 * t }));
+      g += stroke(front, "#43d6ff", "", 0.8);
+      if (showBack) g += stroke(back, "#43d6ff", "3 4", 0.6);
+    }
+    for (let lat = -60; lat <= 60; lat += 30) {
+      const { front, back } = curve((t) => ({ lon: -180 + 360 * t, lat }));
+      const col = lat === 0 ? "#ffe14a" : "#43d6ff";
+      g += stroke(front, col, "", lat === 0 ? 1.4 : 0.8);
+      if (showBack) g += stroke(back, col, "3 4", 0.6);
+    }
+  }
+
+  // panel geometry: the 18-panel volleyball cage as a gnomonic spherical cube —
+  // 6 faces × 3 strips, adjacent faces perpendicular (monkey's-fist weave). Every
+  // seam is a straight line on the cube projected to the sphere (a great-circle
+  // arc), so the 6 faces tile watertight: no gaps, overlaps, or pole pinches.
+  // `strip` = divider position along the cut axis; `width` = run half-extent
+  // (1.0 → faces meet exactly; <1 narrows the panels and opens seam gaps).
+  if ($("showPanels").checked) {
+    const t = clamp(model.strip, 0.05, 0.95);
+    const W = clamp(model.width, 0.4, 2.5);      // run half-extent; 1.0 = watertight, >1 lengthens strips past the cube edge
+    const wv = model.weave ? 1 : 0;
+    const norm3 = (p) => { const l = Math.hypot(p[0], p[1], p[2]) || 1; return [p[0] / l, p[1] / l, p[2] / l]; };
+    const projV = (p) => project(norm3(p));
+    const cube = (F, rv, cv) => { const p = [0, 0, 0]; p[F.fix] = F.s; p[F.run] = rv; p[F.cut] = cv; return p; };
+    const seg = (a, b, n, f) => { const o = []; for (let s = 0; s <= n; s++) o.push(f(a + (b - a) * s / n)); return o; };
+    const polyV = (pts) => {
+      let front = "", back = "", prev = null;
+      for (const p of pts) {
+        const pr = projV(p), cmd = (pr.front ? prev === true : prev === false) ? "L" : "M";
+        if (pr.front) front += `${cmd}${pr.sx.toFixed(1)} ${pr.sy.toFixed(1)} `;
+        else back += `${cmd}${pr.sx.toFixed(1)} ${pr.sy.toFixed(1)} `;
+        prev = pr.front;
+      }
+      return { front, back };
+    };
+
+    // 6 faces; cyclic cut axis (X→Z, Y→X, Z→Y) gives perpendicular adjacency.
+    const faces = [];
+    for (let fix = 0; fix < 3; fix++) for (const s of [-1, 1]) {
+      const inPlane = [0, 1, 2].filter((a) => a !== fix);
+      const cyc = (fix + 2) % 3;
+      const cut = wv ? inPlane.find((a) => a !== cyc) : cyc;
+      const run = inPlane.find((a) => a !== cut);
+      faces.push({ fix, s, cut, run });
+    }
+
+    const ringOf = (F, c0, c1) => {
+      const N = 14, pts = [];
+      pts.push(...seg(-W, W, N, (r) => cube(F, r, c0)));
+      pts.push(...seg(c0, c1, N, (c) => cube(F, W, c)));
+      pts.push(...seg(W, -W, N, (r) => cube(F, r, c1)));
+      pts.push(...seg(c1, c0, N, (c) => cube(F, -W, c)));
+      return pts;
+    };
+    const bands = [[-1, -t], [-t, t], [t, 1]];
+
+    // panel fills (front-facing strips only), alternating shade
+    if ($("fillPanels").checked) faces.forEach((F, fi) => bands.forEach((b, k) => {
+      const ring = ringOf(F, b[0], b[1]); let d = "", allFront = true;
+      for (const p of ring) { const pr = projV(p); if (!pr.front) { allFront = false; break; } d += `${d ? "L" : "M"}${pr.sx.toFixed(1)} ${pr.sy.toFixed(1)} `; }
+      if (allFront) g += `<path d="${d}Z" fill="#ff7a3c" fill-opacity="${(fi + k) % 2 ? 0.17 : 0.07}" stroke="none"/>`;
+    }));
+
+    // strokes: cut seams (dividers ±t orange, outer borders ±1 amber) + run sides (±W)
+    faces.forEach((F) => {
+      for (const cv of [-1, -t, t, 1]) {
+        const { front, back } = polyV(seg(-W, W, 24, (r) => cube(F, r, cv)));
+        const div = Math.abs(cv) < 0.999;
+        g += stroke(front, div ? "#ff7a3c" : "#ffb347", "", div ? 1.6 : 1.9);
+        if (showBack) g += stroke(back, div ? "#ff7a3c" : "#ffb347", "2 5", div ? 0.8 : 0.9);
+      }
+      for (const rv of [-W, W]) {
+        const { front, back } = polyV(seg(-1, 1, 24, (c) => cube(F, rv, c)));
+        g += stroke(front, "#ffb347", "", 1.9);
+        if (showBack) g += stroke(back, "#ffb347", "2 5", 0.9);
+      }
+    });
+  }
+
+  // poles: North (+z) plain, South (-z, valve) as a ⊕ target
+  const np = project(sphPoint(0, 90)), sp = project(sphPoint(0, -90));
+  if (np.front) g += `<circle cx="${np.sx}" cy="${np.sy}" r="5" fill="#6fcf83"/>`;
+  if (sp.front) {
+    g += `<circle cx="${sp.sx}" cy="${sp.sy}" r="7" fill="none" stroke="#ff4a6e" stroke-width="2" vector-effect="non-scaling-stroke"/>
+          <line x1="${sp.sx - 10}" y1="${sp.sy}" x2="${sp.sx + 10}" y2="${sp.sy}" stroke="#ff4a6e" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+          <line x1="${sp.sx}" y1="${sp.sy - 10}" x2="${sp.sx}" y2="${sp.sy + 10}" stroke="#ff4a6e" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
+  }
+  overlay.innerHTML = g;
+  drawGizmo();
+}
+
+// ---- orientation gizmo: which named face is toward the camera -------------
+// The cage has 4-fold symmetry, so the geometry alone can't distinguish FRONT
+// from a SIDE. This rotates with the pose and names the 6 faces, so each photo
+// can be registered to a consistent body frame (front→FRONT, back→BACK, …).
+const GIZMO_AXES = [
+  { d: [1, 0, 0], lbl: "FRONT", col: "#ff7a6b" },
+  { d: [-1, 0, 0], lbl: "BACK", col: "#ff7a6b" },
+  { d: [0, 1, 0], lbl: "SIDE 1", col: "#6fcf83" },
+  { d: [0, -1, 0], lbl: "SIDE 2", col: "#6fcf83" },
+  { d: [0, 0, 1], lbl: "TOP", col: "#5aa0ff" },
+  { d: [0, 0, -1], lbl: "VALVE", col: "#5aa0ff" },
+];
+function drawGizmo() {
+  const giz = $("gizmo"); if (!giz) return;
+  const W = 176, cx = W / 2, cy = 78, S = 42;
+  const items = GIZMO_AXES.map((a) => { const r = rotate(a.d); return { ...a, x: cx + S * r[0], y: cy - S * r[1], z: r[2] }; });
+  const facing = items.reduce((b, a) => (a.z > b.z ? a : b));
+  let g = `<text x="${cx}" y="16" fill="${facing.col}" font-size="12" font-weight="700" text-anchor="middle">▶ facing ${facing.lbl}</text>`;
+  for (const it of [...items].sort((p, q) => p.z - q.z)) {
+    const op = it.z >= -0.02 ? 1 : 0.28;
+    g += `<line x1="${cx}" y1="${cy}" x2="${it.x.toFixed(1)}" y2="${it.y.toFixed(1)}" stroke="${it.col}" stroke-opacity="${op}" stroke-width="1.6"/>`;
+    g += `<circle cx="${it.x.toFixed(1)}" cy="${it.y.toFixed(1)}" r="2.4" fill="${it.col}" fill-opacity="${op}"/>`;
+    g += `<text x="${it.x.toFixed(1)}" y="${(it.y + (it.y < cy ? -5 : 11)).toFixed(1)}" fill="${it.col}" fill-opacity="${op}" font-size="8.5" text-anchor="middle">${it.lbl}</text>`;
+  }
+  giz.innerHTML = g;
+}
+
+// ---- bind controls <-> state --------------------------------------------
+function syncInputs() {
+  for (const k of POSE_KEYS) { $(k).value = round(pose[k]); $(k + "-r").value = pose[k]; }
+  for (const k of MODEL_KEYS) { $(k).value = model[k]; $(k + "-r").value = model[k]; }
+  $("weave").checked = model.weave;
+}
+const round = (v) => Math.round(v * 100) / 100;
+
+function bindNum(k, target, isModel) {
+  const obj = () => (isModel ? model : pose);
+  const apply = (v) => {
+    v = parseFloat(v); if (Number.isNaN(v)) return;
+    obj()[k] = v; $(k).value = round(v); $(k + "-r").value = v;
+    if (isModel) persist();
+    render();
+  };
+  $(k).addEventListener("input", (e) => apply(e.target.value));
+  $(k + "-r").addEventListener("input", (e) => apply(e.target.value));
+}
+POSE_KEYS.forEach((k) => bindNum(k, k, false));
+MODEL_KEYS.forEach((k) => bindNum(k, k, true));
+$("weave").addEventListener("change", (e) => { model.weave = e.target.checked; persist(); render(); });
+["showGrat", "showPanels", "fillPanels", "showBack"].forEach((id) => $(id).addEventListener("change", render));
+$("imgop").addEventListener("input", (e) => { bg.style.opacity = e.target.value; $("imgop-r").value = e.target.value; });
+$("imgop-r").addEventListener("input", (e) => { bg.style.opacity = e.target.value; $("imgop").value = e.target.value; });
+
+// ---- pointer interaction -------------------------------------------------
+function toImg(e) {
+  const m = svg.getScreenCTM().inverse();
+  const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m);
+  return { x: p.x, y: p.y };
+}
+let drag = null;
+svg.addEventListener("contextmenu", (e) => e.preventDefault());
+svg.addEventListener("pointerdown", (e) => {
+  svg.setPointerCapture(e.pointerId);
+  const space = pressed.has(" ");
+  let mode = "orbit";
+  if (e.button === 2) mode = "center";
+  else if (e.button === 1 || space) mode = "pan";
+  else if (e.shiftKey) mode = "roll";
+  drag = { mode, x: e.clientX, y: e.clientY, img: toImg(e), start: { ...pose, q: [...pose.q] }, view: { ...view } };
+  if (mode === "pan") svg.classList.add("panning");
+});
+svg.addEventListener("pointermove", (e) => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (drag.mode === "orbit") {
+    // trackball: dx → rotate about camera up (Y), dy → about camera right (X)
+    const d = qMul(qAxis([0, 1, 0], dx * 0.3), qAxis([1, 0, 0], dy * 0.3));
+    pose.q = qNorm(qMul(d, drag.start.q));
+  } else if (drag.mode === "roll") {
+    pose.q = qNorm(qMul(qAxis([0, 0, 1], dx * 0.3), drag.start.q)); // twist about view axis
+  } else if (drag.mode === "center") {
+    const i = toImg(e);
+    pose.cx = drag.start.cx + (i.x - drag.img.x);
+    pose.cy = drag.start.cy + (i.y - drag.img.y);
+  } else if (drag.mode === "pan") {
+    const sc = view.w / svg.clientWidth;
+    view.x = drag.view.x - dx * sc; view.y = drag.view.y - dy * sc; applyView();
+  }
+  syncInputs(); render();
+});
+const endDrag = (e) => { drag = null; svg.classList.remove("panning"); try { svg.releasePointerCapture(e.pointerId); } catch {} };
+svg.addEventListener("pointerup", endDrag);
+svg.addEventListener("pointercancel", endDrag);
+svg.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  if (e.ctrlKey || e.metaKey) {
+    const i = toImg(e), f = Math.exp(e.deltaY * 0.001);
+    view.x = i.x - (i.x - view.x) * f; view.y = i.y - (i.y - view.y) * f;
+    view.w *= f; view.h *= f; applyView();
+  } else {
+    pose.radius = clamp(pose.radius * Math.exp(-e.deltaY * 0.001), 10, 4000);
+    syncInputs(); render();
+  }
+}, { passive: false });
+
+const pressed = new Set();
+const NUDGE = {
+  ArrowLeft: [[0, 1, 0], -1], ArrowRight: [[0, 1, 0], 1],
+  ArrowUp: [[1, 0, 0], -1], ArrowDown: [[1, 0, 0], 1],
+  "[": [[0, 0, 1], -1], "]": [[0, 0, 1], 1],
+};
+addEventListener("keydown", (e) => {
+  if (e.key === " ") { e.preventDefault(); pressed.add(e.key); return; }
+  if (["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
+  const n = NUDGE[e.key];
+  if (n) {
+    e.preventDefault();
+    pose.q = qNorm(qMul(qAxis(n[0], n[1] * (e.shiftKey ? 1 : 5)), pose.q));
+    render();
+  } else pressed.add(e.key);
+});
+addEventListener("keyup", (e) => pressed.delete(e.key));
+
+// snap orientation to a named face (then drag/arrows to fine-tune)
+// Canonical face orientations (no baked-in twist). Any per-photo twist needed to
+// match the real ball is applied in the UI and captured in that photo's q, which
+// is what the exported config carries into the UV-mapping step.
+const SNAP = {
+  FRONT: qAxis([0, 1, 0], -90), BACK: qAxis([0, 1, 0], 90),
+  "SIDE 1": qAxis([1, 0, 0], 90), "SIDE 2": qAxis([1, 0, 0], -90),
+  TOP: [0, 0, 0, 1], VALVE: qAxis([1, 0, 0], 180),
+};
+document.querySelectorAll("#snaprow button").forEach((b) =>
+  b.onclick = () => { pose.q = [...SNAP[b.dataset.snap]]; render(); });
+
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const wrap180 = (v) => { v = ((v + 180) % 360 + 360) % 360 - 180; return v; };
+function applyView() { svg.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`); }
+
+// ---- photos --------------------------------------------------------------
+function addPhoto(name, url) {
+  const img = new Image();
+  img.onload = () => {
+    photos[name] = { url, w: img.naturalWidth, h: img.naturalHeight };
+    renderPhotoList();
+    if (!current) selectPhoto(name);
+  };
+  img.src = url;
+}
+function renderPhotoList() {
+  const list = $("photoList"); list.innerHTML = "";
+  for (const name of Object.keys(photos)) {
+    const b = document.createElement("button");
+    b.textContent = name.replace(/^optx_|\.jpe?g$/g, "");
+    if (store.photos[name]) b.classList.add("done");
+    if (name === current) b.classList.add("active");
+    b.onclick = () => selectPhoto(name);
+    list.appendChild(b);
+  }
+}
+function selectPhoto(name) {
+  current = name;
+  const p = photos[name];
+  bg.setAttribute("href", p.url);
+  bg.setAttribute("width", p.w); bg.setAttribute("height", p.h);
+  view = { x: 0, y: 0, w: p.w, h: p.h }; applyView();
+  const s = store.photos[name];
+  if (s) {
+    pose = { ...defaultPose(), cx: s.cx, cy: s.cy, radius: s.radius };
+    pose.q = Array.isArray(s.q) ? [...s.q] : eulerToQ(s.yaw || 0, s.pitch || 0, s.roll || 0);
+  } else {
+    pose = { ...defaultPose(), cx: p.w / 2, cy: p.h / 2, radius: Math.min(p.w, p.h) * 0.47 };
+  }
+  for (const k of POSE_KEYS) { const r = $(k + "-r"); if (k === "cx") { r.max = p.w; } if (k === "cy") { r.max = p.h; } if (k === "radius") { r.max = Math.max(p.w, p.h); } }
+  syncInputs(); render(); renderPhotoList();
+}
+
+$("loadSamples").onclick = () => {
+  ["front", "back", "side_1", "side_2", "bottom"].forEach((s) =>
+    addPhoto(`optx_${s}.jpg`, `./ball_photos/optx_${s}.jpg`));
+};
+$("loadFiles").onclick = () => $("fileInput").click();
+$("fileInput").onchange = (e) => {
+  for (const f of e.target.files) addPhoto(f.name, URL.createObjectURL(f));
+};
+
+// ---- auto-fit circle (bounding box of non-white pixels) ------------------
+$("autofit").onclick = () => {
+  if (!current) return;
+  const p = photos[current];
+  const c = document.createElement("canvas"); c.width = p.w; c.height = p.h;
+  const cx = c.getContext("2d");
+  const im = new Image(); im.crossOrigin = "anonymous";
+  im.onload = () => {
+    cx.drawImage(im, 0, 0);
+    let data;
+    try { data = cx.getImageData(0, 0, p.w, p.h).data; }
+    catch (err) { alert("Auto-fit blocked (tainted canvas). Set center/radius by hand."); return; }
+    let minX = p.w, minY = p.h, maxX = 0, maxY = 0, found = false;
+    const step = Math.max(1, Math.floor(Math.min(p.w, p.h) / 600));
+    for (let y = 0; y < p.h; y += step) for (let x = 0; x < p.w; x += step) {
+      const i = (y * p.w + x) * 4, r = data[i], g = data[i + 1], b = data[i + 2];
+      if (Math.min(r, g, b) < 224) { // not near-white background
+        found = true;
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+      }
+    }
+    if (!found) return;
+    pose.cx = (minX + maxX) / 2; pose.cy = (minY + maxY) / 2;
+    pose.radius = Math.max(maxX - minX, maxY - minY) / 2;
+    syncInputs(); render();
+  };
+  im.src = p.url;
+};
+$("resetPose").onclick = () => {
+  const p = photos[current];
+  pose = { ...defaultPose(), cx: p.w / 2, cy: p.h / 2, radius: Math.min(p.w, p.h) * 0.47 };
+  syncInputs(); render();
+};
+
+// ---- save / export / import ----------------------------------------------
+$("save").onclick = () => {
+  if (!current) return;
+  store.photos[current] = { ...pose, q: [...pose.q] };
+  persist(); renderPhotoList();
+  $("json").value = serialize();
+};
+function serialize() {
+  const photos = {};
+  for (const [n, s] of Object.entries(store.photos)) {
+    photos[n] = Array.isArray(s.q) ? s
+      : { cx: s.cx, cy: s.cy, radius: s.radius, q: eulerToQ(s.yaw || 0, s.pitch || 0, s.roll || 0) };
+  }
+  return JSON.stringify({
+    _convention: "orthographic sphere; cx,cy,radius in native image px. Orientation q=[x,y,z,w] is a unit quaternion mapping body->camera; camera looks down -Z (+z_cam toward viewer); q=identity puts +Z (TOP) at camera. Body axes: +X=FRONT, -X=BACK, +Y=SIDE 1, -Y=SIDE 2, +Z=TOP, -Z=VALVE(South pole). Panels: 18-panel gnomonic spherical cube (6 faces x 3 strips, cyclic cut axes X->Z,Y->X,Z->Y; weave swaps chirality). Every seam is a cube straight line projected to the sphere (great-circle arc); watertight at width=1. strip = center-strip width (divider position along the cut axis); width = strip length (run half-extent; 1.0 = watertight cube, >1 extends strips past the cube edge).",
+    model: { ...model },
+    photos,
+  }, null, 2);
+}
+$("export").onclick = () => {
+  const txt = serialize(); $("json").value = txt;
+  const blob = new Blob([txt], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "ball_texture.config.json"; a.click();
+};
+$("import").onclick = () => $("importInput").click();
+$("importInput").onchange = (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const cfg = JSON.parse(rd.result);
+      if (cfg.model) { model = { ...model, ...cfg.model }; }
+      if (cfg.photos) { store.photos = cfg.photos; }
+      persist(); syncInputs(); renderPhotoList();
+      if (current) selectPhoto(current);
+      $("json").value = serialize();
+    } catch (err) { alert("Bad JSON: " + err.message); }
+  };
+  rd.readAsText(f);
+};
+
+// ---- boot ----------------------------------------------------------------
+syncInputs();
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OPTX texture preview</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #14161a; color: #d8dce2;
+    font: 13px system-ui, sans-serif; }
+  #app { display: grid; grid-template-columns: 1fr 300px; height: 100vh; }
+  #stage { position: relative; background:
+    repeating-conic-gradient(#1b1e24 0% 25%, #181b20 0% 50%) 50% / 28px 28px; }
+  canvas { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+  canvas.drag { cursor: grabbing; }
+  #panel { background: #1a1d22; border-left: 1px solid #2a2e36; padding: 14px; overflow-y: auto; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #8b93a1; margin: 16px 0 8px; }
+  h2:first-child { margin-top: 2px; }
+  label.row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+  button { background: #2a2f38; color: #e3e7ee; border: 1px solid #3a404a; border-radius: 5px;
+    padding: 5px 9px; cursor: pointer; font: inherit; }
+  button.active { background: #3b6fa3; border-color: #5a8fc4; }
+  .seg { display: flex; gap: 4px; flex-wrap: wrap; }
+  .hint { color: #6b7280; font-size: 11px; line-height: 1.5; }
+  img#flat { width: 100%; border: 1px solid #2a2e36; border-radius: 4px; margin-top: 6px;
+    image-rendering: auto; background: #000; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage"><canvas id="gl"></canvas></div>
+  <div id="panel">
+    <h2>Texture</h2>
+    <div class="seg" id="texsel">
+      <button data-tex="ball_optx_filled.png" class="active">filled</button>
+      <button data-tex="ball_optx.png">blended</button>
+      <button data-tex="ball_optx_coverage.png">coverage</button>
+    </div>
+    <h2>View</h2>
+    <label class="row"><input type="checkbox" id="spin" checked> auto-rotate</label>
+    <label class="row"><input type="checkbox" id="wire"> show wireframe</label>
+    <label class="row">light <input type="range" id="light" min="0" max="1" step="0.05" value="0"></label>
+    <p class="hint">Drag to orbit · wheel to zoom. “light” adds simple diffuse shading
+      (0 = flat/unlit, to judge the albedo as the app would relight it).</p>
+    <h2>Equirectangular</h2>
+    <img id="flat" />
+    <p class="hint">Seam is at +X (FRONT); bottom row = valve (−Z). Side meridians
+      (±Y) are the front/back overlap — add SIDE 1 / SIDE 2 to sharpen them.</p>
+  </div>
+</div>
+<script type="module">
+const cv = document.getElementById("gl");
+const gl = cv.getContext("webgl2", { antialias: true });
+
+const VERT = `#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec2 aUV;
+uniform mat4 uProj, uView;
+out vec2 vUV; out vec3 vN;
+void main(){ vUV=aUV; vN=normalize(aPos); gl_Position=uProj*uView*vec4(aPos,1.0); }`;
+const FRAG = `#version 300 es
+precision highp float;
+in vec2 vUV; in vec3 vN;
+uniform sampler2D uTex; uniform float uLight; uniform vec3 uEye;
+out vec4 frag;
+void main(){
+  vec3 c = texture(uTex, vUV).rgb;
+  vec3 L = normalize(vec3(0.4,0.5,0.8));
+  float d = max(dot(normalize(vN), L), 0.0);
+  float shade = mix(1.0, 0.35 + 0.75*d, uLight);
+  frag = vec4(c*shade, 1.0);
+}`;
+const LFRAG = `#version 300 es
+precision highp float; out vec4 frag; void main(){ frag=vec4(0.55,0.6,0.7,1.0); }`;
+
+function sh(t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
+  if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))throw gl.getShaderInfoLog(o);return o;}
+function prog(v,f){const p=gl.createProgram();gl.attachShader(p,sh(gl.VERTEX_SHADER,v));
+  gl.attachShader(p,sh(gl.FRAGMENT_SHADER,f));gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw gl.getProgramInfoLog(p);return p;}
+const P = prog(VERT,FRAG), PL = prog(VERT,LFRAG);
+
+// --- uv sphere (matches the bake: v = polar from +Z, u = azimuth) ----------
+function sphere(nu, nv){
+  const pos=[], uv=[], idx=[], line=[];
+  for(let j=0;j<=nv;j++){ const vv=Math.PI*j/nv;
+    for(let i=0;i<=nu;i++){ const uu=2*Math.PI*i/nu;
+      pos.push(Math.sin(vv)*Math.cos(uu), Math.sin(vv)*Math.sin(uu), Math.cos(vv));
+      uv.push(i/nu, j/nv); } }
+  const w=nu+1;
+  for(let j=0;j<nv;j++) for(let i=0;i<nu;i++){
+    const a=j*w+i,b=a+1,c=a+w,d=c+1;
+    idx.push(a,c,b, b,c,d); line.push(a,b, a,c); }
+  const vao=gl.createVertexArray(); gl.bindVertexArray(vao);
+  const pb=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,pb);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(pos),gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0);
+  const ub=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,ub);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(uv),gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1,2,gl.FLOAT,false,0,0);
+  const ib=gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint32Array(idx),gl.STATIC_DRAW);
+  const lb=gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,lb);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint32Array(line),gl.STATIC_DRAW);
+  gl.bindVertexArray(null);
+  return {vao, ib, lb, n:idx.length, nl:line.length};
+}
+const mesh = sphere(96, 48);
+
+// --- mat4 ------------------------------------------------------------------
+const persp=(f,a,n,fa)=>{const t=1/Math.tan(f/2),nf=1/(n-fa);
+  return new Float32Array([t/a,0,0,0, 0,t,0,0, 0,0,(fa+n)*nf,-1, 0,0,2*fa*n*nf,0]);};
+const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]];
+const cr=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const nm=(a)=>{const l=Math.hypot(...a)||1;return[a[0]/l,a[1]/l,a[2]/l];};
+const dt=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+function look(e,c,u){const z=nm(sub(e,c)),x=nm(cr(u,z)),y=cr(z,x);
+  return new Float32Array([x[0],y[0],z[0],0, x[1],y[1],z[1],0, x[2],y[2],z[2],0,
+    -dt(x,e),-dt(y,e),-dt(z,e),1]);}
+
+// --- texture loading -------------------------------------------------------
+const tex = gl.createTexture();
+function loadTex(url){
+  const im = new Image();
+  im.onload = () => {
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,im);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  };
+  im.src = url + "?t=" + Date.now();  // bust cache on re-bake
+  document.getElementById("flat").src = im.src;
+}
+loadTex("ball_optx_filled.png");
+document.querySelectorAll("#texsel button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#texsel button").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active"); loadTex(b.dataset.tex);
+});
+
+// --- orbit -----------------------------------------------------------------
+let az=0.6, el=0.3, dist=3.2, dragging=false, lx=0, ly=0;
+cv.addEventListener("pointerdown",e=>{dragging=true;lx=e.clientX;ly=e.clientY;cv.classList.add("drag");cv.setPointerCapture(e.pointerId);});
+cv.addEventListener("pointermove",e=>{ if(!dragging)return;
+  az-=(e.clientX-lx)*0.01; el=Math.max(-1.5,Math.min(1.5,el+(e.clientY-ly)*0.01));
+  lx=e.clientX; ly=e.clientY; });
+const up=e=>{dragging=false;cv.classList.remove("drag");};
+cv.addEventListener("pointerup",up); cv.addEventListener("pointercancel",up);
+cv.addEventListener("wheel",e=>{e.preventDefault();dist=Math.max(1.3,Math.min(8,dist*Math.exp(e.deltaY*0.001)));},{passive:false});
+
+gl.enable(gl.DEPTH_TEST);
+function frame(){
+  const dpr=Math.min(2,devicePixelRatio||1);
+  const w=Math.floor(cv.clientWidth*dpr),h=Math.floor(cv.clientHeight*dpr);
+  if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h;}
+  gl.viewport(0,0,w,h); gl.clearColor(0.09,0.10,0.12,1);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  if(document.getElementById("spin").checked && !dragging) az+=0.004;
+  const ce=Math.cos(el),se=Math.sin(el);
+  const eye=[dist*ce*Math.cos(az),dist*ce*Math.sin(az),dist*se];
+  const proj=persp(45*Math.PI/180, w/Math.max(1,h), 0.1, 50);
+  const view=look(eye,[0,0,0],[0,0,1]);
+  gl.useProgram(P);
+  gl.uniformMatrix4fv(gl.getUniformLocation(P,"uProj"),false,proj);
+  gl.uniformMatrix4fv(gl.getUniformLocation(P,"uView"),false,view);
+  gl.uniform1f(gl.getUniformLocation(P,"uLight"),parseFloat(document.getElementById("light").value));
+  gl.uniform1i(gl.getUniformLocation(P,"uTex"),0);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,tex);
+  gl.bindVertexArray(mesh.vao);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,mesh.ib);
+  gl.drawElements(gl.TRIANGLES,mesh.n,gl.UNSIGNED_INT,0);
+  if(document.getElementById("wire").checked){
+    gl.useProgram(PL);
+    gl.uniformMatrix4fv(gl.getUniformLocation(PL,"uProj"),false,proj);
+    gl.uniformMatrix4fv(gl.getUniformLocation(PL,"uView"),false,view);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,mesh.lb);
+    gl.drawElements(gl.LINES,mesh.nl,gl.UNSIGNED_INT,0);
+  }
+  gl.bindVertexArray(null);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

@@ -90,3 +90,46 @@ export function uvSphere(radius: number, nu = 96, nv = 48): { vertices: Float64A
   }
   return { vertices: new Float64Array(verts), faces: new Int32Array(faces) };
 }
+
+/**
+ * UV sphere with per-vertex equirectangular UVs, for the textured viewer ball.
+ * Identical lat/long layout to `uvSphere` but with a duplicated seam column
+ * (nu+1) so u runs cleanly 0->1 instead of wrapping. v=0 is the +Z pole (matches
+ * the baked texture's top row). The STL path keeps using `uvSphere` (no UVs).
+ */
+export function uvSphereTextured(
+  radius: number,
+  nu = 96,
+  nv = 48,
+): { vertices: Float64Array; faces: Int32Array; uvs: Float32Array } {
+  const verts: number[] = [];
+  const uvs: number[] = [];
+  for (let iv = 0; iv < nv; iv++) {
+    const vv = (Math.PI * iv) / (nv - 1);
+    for (let iu = 0; iu <= nu; iu++) {
+      const uu = (2 * Math.PI * iu) / nu;
+      verts.push(
+        radius * Math.sin(vv) * Math.cos(uu),
+        radius * Math.sin(vv) * Math.sin(uu),
+        radius * Math.cos(vv),
+      );
+      uvs.push(iu / nu, iv / (nv - 1));
+    }
+  }
+  const w = nu + 1;
+  const faces: number[] = [];
+  for (let i = 0; i < nv - 1; i++) {
+    for (let j = 0; j < nu; j++) {
+      const a = i * w + j;
+      const b = a + 1;
+      const c = (i + 1) * w + j;
+      const d = c + 1;
+      faces.push(a, c, b, b, c, d);
+    }
+  }
+  return {
+    vertices: new Float64Array(verts),
+    faces: new Int32Array(faces),
+    uvs: new Float32Array(uvs),
+  };
+}

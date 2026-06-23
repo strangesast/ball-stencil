@@ -69,6 +69,23 @@ MIN_SEGMENT_MM = 0.05           # smallest arc-length segment we bother emitting
 TARGET_EDGE_MM = 1.2            # nominal triangle edge length on the sphere
 MAX_EDGE_MM = 1.5               # quality target / reporting threshold
 
+# Which surface-mesher builds the shell from the 2D material region:
+#   "constrained" -- conforming Delaunay (poly2tri): the cut-hole boundary IS the
+#                    design contour (constraint edges), so the traced edge follows
+#                    the artwork smoothly.  Interior filled with TARGET_EDGE points.
+#   "centroid"    -- legacy: unconstrained Delaunay of sampled points, keep a
+#                    triangle iff its centroid is inside the material.  The cut
+#                    edge is then a by-product of the centroid test and comes out
+#                    faceted / sawtoothed (kept for comparison + as a fallback).
+MESH_STRATEGY = "constrained"
+
+# Boundary-smoothness tolerance (mm on the sphere): how closely the *cut edge*
+# follows the true design curve, DECOUPLED from TARGET_EDGE_MM (triangle size).
+# Only the "constrained" mesher honours this -- the contour is flattened to this
+# chord error and used verbatim as the constrained boundary, so making triangles
+# bigger for speed never coarsens the drawn edge. Finer than CHORD_ERROR_MM.
+BOUNDARY_SMOOTHNESS_MM = 0.04
+
 # ----------------------------------------------------------------------------
 # Numerical
 # ----------------------------------------------------------------------------
@@ -116,6 +133,8 @@ class Config:
     min_segment_mm: float = MIN_SEGMENT_MM
     target_edge_mm: float = TARGET_EDGE_MM
     max_edge_mm: float = MAX_EDGE_MM
+    mesh_strategy: str = MESH_STRATEGY
+    boundary_smoothness_mm: float = BOUNDARY_SMOOTHNESS_MM
 
     radius_tolerance_mm: float = RADIUS_TOLERANCE_MM
     min_island_area_mm2: float = MIN_ISLAND_AREA_MM2
@@ -166,3 +185,19 @@ class Config:
             raise ValueError(f"target_edge_mm must be > 0, got {self.target_edge_mm}")
         if not self.chord_error_mm > 0:
             raise ValueError(f"chord_error_mm must be > 0, got {self.chord_error_mm}")
+        if self.mesh_strategy not in ("constrained", "centroid"):
+            raise ValueError(
+                f"mesh_strategy must be 'constrained' or 'centroid', got {self.mesh_strategy!r}"
+            )
+        if not self.boundary_smoothness_mm > 0:
+            raise ValueError(
+                f"boundary_smoothness_mm must be > 0, got {self.boundary_smoothness_mm}"
+            )
+        # The constrained mesher uses the cut dilation as its manifold guarantee
+        # and deliberately does NOT grid-snap the contour, so nothing else welds
+        # coincident boundary points; cut_separation_svg must be > 0 for it.
+        if self.mesh_strategy == "constrained" and not self.cut_separation_svg > 0:
+            raise ValueError(
+                "cut_separation_svg must be > 0 for the 'constrained' mesher "
+                f"(it guarantees a manifold cut edge), got {self.cut_separation_svg}"
+            )

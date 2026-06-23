@@ -51,20 +51,28 @@ let last: {
   ballRadius: number;
 } | null = null;
 
-let currentJob = 0;
+// Job id of the build currently in flight, or -1 when idle. The global error
+// nets report with -1 so a stray/late rejection is never mis-attributed to a
+// (since-superseded or already-finished) job the main thread would accept.
+const NO_JOB = -1;
+let currentJob = NO_JOB;
 
 async function ensureLoaded() {
   if (!mod) mod = await import("./pipeline/pipeline");
   if (!exportMod) exportMod = await import("./pipeline/exportmesh");
   if (!cfgMod) cfgMod = await import("./pipeline/config");
+  // Robust cut-dilation offset (Clipper 1); the pipeline runs sync after this.
+  await (await import("./pipeline/offset")).loadOffsetLib();
 }
 
 async function handleBuild(msg: BuildMsg) {
   currentJob = msg.jobId;
-  await ensureLoaded();
-  if (msg.jobId !== currentJob) return; // superseded while loading
 
   try {
+    // Inside the try so module-eval failures (a dep that throws at import, an
+    // OOM, etc.) surface as an error message instead of a silently hung build.
+    await ensureLoaded();
+    if (msg.jobId !== currentJob) return; // superseded while loading
     const parsed = (await import("./pipeline/svg")).parseSvg(msg.svgText);
     const res = mod!.runPipeline(parsed, msg.params, msg.name);
     if (msg.jobId !== currentJob) return; // superseded during compute
@@ -118,30 +126,41 @@ async function handleBuild(msg: BuildMsg) {
       jobId: msg.jobId,
       message: err instanceof Error ? err.message : String(err),
     });
+  } finally {
+    // Mark idle once this build settles, unless a newer build already took over.
+    if (msg.jobId === currentJob) currentJob = NO_JOB;
   }
 }
 
 async function handleExport(msg: ExportMsg) {
-  await ensureLoaded();
-  if (!last) {
-    (self as DedicatedWorkerGlobalScope).postMessage({ type: "exportError", kind: msg.kind, message: "no mesh built yet" });
-    return;
+  try {
+    await ensureLoaded();
+    if (!last) {
+      (self as DedicatedWorkerGlobalScope).postMessage({ type: "exportError", kind: msg.kind, message: "no mesh built yet" });
+      return;
+    }
+    if (msg.kind === "ball") {
+      const { vertices, faces } = exportMod!.uvSphere(last.ballRadius, 96, 48);
+      const buf = exportMod!.writeStl(vertices, faces);
+      (self as DedicatedWorkerGlobalScope).postMessage({ type: "export", kind: "ball", buffer: buf }, [buf]);
+      return;
+    }
+    if (msg.kind === "stl") {
+      const buf = exportMod!.writeStl(last.vertices, last.faces);
+      (self as DedicatedWorkerGlobalScope).postMessage({ type: "export", kind: "stl", buffer: buf }, [buf]);
+      return;
+    }
+    // obj
+    const text = exportMod!.writeObj(last.vertices, last.faces);
+    const buf = new TextEncoder().encode(text).buffer;
+    (self as DedicatedWorkerGlobalScope).postMessage({ type: "export", kind: "obj", buffer: buf }, [buf]);
+  } catch (err) {
+    (self as DedicatedWorkerGlobalScope).postMessage({
+      type: "exportError",
+      kind: msg.kind,
+      message: err instanceof Error ? err.message : String(err),
+    });
   }
-  if (msg.kind === "ball") {
-    const { vertices, faces } = exportMod!.uvSphere(last.ballRadius, 96, 48);
-    const buf = exportMod!.writeStl(vertices, faces);
-    (self as DedicatedWorkerGlobalScope).postMessage({ type: "export", kind: "ball", buffer: buf }, [buf]);
-    return;
-  }
-  if (msg.kind === "stl") {
-    const buf = exportMod!.writeStl(last.vertices, last.faces);
-    (self as DedicatedWorkerGlobalScope).postMessage({ type: "export", kind: "stl", buffer: buf }, [buf]);
-    return;
-  }
-  // obj
-  const text = exportMod!.writeObj(last.vertices, last.faces);
-  const buf = new TextEncoder().encode(text).buffer;
-  (self as DedicatedWorkerGlobalScope).postMessage({ type: "export", kind: "obj", buffer: buf }, [buf]);
 }
 
 self.onmessage = (e: MessageEvent<InMsg>) => {
@@ -149,3 +168,25 @@ self.onmessage = (e: MessageEvent<InMsg>) => {
   if (msg.type === "build") void handleBuild(msg);
   else if (msg.type === "export") void handleExport(msg);
 };
+
+// Safety net: any error that still escapes a handler (or a non-promise throw at
+// module scope) is reported to the main thread instead of vanishing as an
+// "Uncaught (in promise)" with the build badge stuck on "building…".
+// Reported with NO_JOB (not currentJob): an escaped error can't be reliably tied
+// to a specific build, and stamping the latest job id would either flip that
+// build's PASS to a false FAIL or be dropped as stale. NO_JOB is always shown.
+self.addEventListener("unhandledrejection", (e: PromiseRejectionEvent) => {
+  const reason = e.reason;
+  (self as DedicatedWorkerGlobalScope).postMessage({
+    type: "error",
+    jobId: NO_JOB,
+    message: "worker error: " + (reason instanceof Error ? reason.message : String(reason)),
+  });
+});
+self.addEventListener("error", (e: ErrorEvent) => {
+  (self as DedicatedWorkerGlobalScope).postMessage({
+    type: "error",
+    jobId: NO_JOB,
+    message: "worker error: " + e.message,
+  });
+});

@@ -38,16 +38,22 @@ function provisionalScaleMax(
 
 export function runPipeline(parsed: ParsedSvg, p: Params, name = "input.svg"): PipelineResult {
   validateParams(p);
-  const clip = new Clip(p.snap_grid_svg);
+  // The "constrained" mesher uses the flattened contour verbatim as the cut edge,
+  // so it flattens to the (finer) boundary-smoothness budget and does NOT
+  // grid-snap the contour (snapping re-introduces stair-steps). The legacy
+  // "centroid" mesher keeps the manufacturing chord budget + topology snap grid.
+  const constrained = p.mesh_strategy === "constrained";
+  const flattenBudgetMm = constrained ? p.boundary_smoothness_mm : p.chord_error_mm;
+  const clip = new Clip(constrained ? 0 : p.snap_grid_svg);
 
-  // --- 1. load + tessellate (two passes to honour the chord-error budget) ---
+  // --- 1. load + tessellate (two passes to honour the smoothness budget) ---
   const provisionalTol = 0.2; // SVG units
   let art = loadArtwork(parsed, provisionalTol, clip, name);
 
   const center: [number, number] = p.design_center_uv ?? art.center;
 
   const scaleMax = provisionalScaleMax(art.region, center, p, clip);
-  const chordTolSvg = p.chord_error_mm / scaleMax;
+  const chordTolSvg = flattenBudgetMm / scaleMax;
   if (chordTolSvg < provisionalTol) {
     art = loadArtwork(parsed, chordTolSvg, clip, name);
   }

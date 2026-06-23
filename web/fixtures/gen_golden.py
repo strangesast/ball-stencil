@@ -68,24 +68,31 @@ def err_case(svg: str, **overrides) -> dict:
 
 def main() -> None:
     cases = []
+    # Default strategy is "constrained" (smooth poly2tri cut edge). A handful of
+    # "centroid" (legacy) cases pin the fallback mesher for regression.
     matrix = [
         ("splash.svg", {}),
         ("splash.svg", {"wall_thickness_mm": 4.0}),
         ("splash.svg", {"cap_angle_deg": 60.0}),
         ("splash.svg", {"target_edge_mm": 2.5}),
         ("splash.svg", {"sphere_diameter_mm": 180.0}),
+        ("splash.svg", {"mesh_strategy": "centroid"}),
         ("splash_z.svg", {}),
+        ("splash_z.svg", {"mesh_strategy": "centroid"}),
         ("dot.svg", {}),
         ("dot.svg", {"wall_thickness_mm": 4.0}),
         ("dot.svg", {"cap_angle_deg": 60.0}),
         ("dot.svg", {"target_edge_mm": 2.5}),
         ("dot.svg", {"sphere_diameter_mm": 180.0}),
         ("dot.svg", {"fit_clearance_mm": 1.0}),
+        ("dot.svg", {"mesh_strategy": "centroid"}),
         ("ring.svg", {}),
         ("ring.svg", {"min_island_area_mm2": 0.0}),
         ("ring.svg", {"wall_thickness_mm": 4.0}),
+        ("ring.svg", {"mesh_strategy": "centroid"}),
         ("multi.svg", {}),
         ("multi.svg", {"cap_angle_deg": 60.0}),
+        ("multi.svg", {"mesh_strategy": "centroid"}),
     ]
     for svg, ov in matrix:
         print(f"[golden] {svg} {ov}", file=sys.stderr)

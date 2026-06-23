@@ -133,7 +133,7 @@ src/
     svgio.ts         even-odd filled region (XOR fold)
     clip.ts          2D boolean/offset/precision ops over Clipper2 + spatial indices
     mapping.ts       Lambert azimuthal equal-area plane→sphere map + scales
-    meshbuild.ts     material region, sampling, Delaunay, pinch-split, wall stitching
+    meshbuild.ts     material region, constrained (poly2tri) / centroid mesher, pinch-split, walls
     meshcheck.ts     watertight/manifold/winding/radius/quality validation
     exportmesh.ts    binary STL + OBJ writers, UV reference sphere
     pipeline.ts      orchestration (two-pass chord budget → build → validate)
@@ -156,8 +156,10 @@ Runtime dependencies are deliberately minimal, mature, and near-zero-dep:
 
 | package | role | justification |
 |---|---|---|
-| `clipper2-js` (1.2.4) | 2D boolean ops + polygon offset | The one substantial, justified dependency. Robust even-odd union, difference, offsetting and precision handling — the direct analogue of Shapely/GEOS. Reimplementing robust polygon booleans would be large and error-prone. Pure TypeScript, no transitive deps, no WASM to go stale. |
-| `delaunator` (5.1.0) | Delaunay triangulation | Tiny, zero-dependency, stable, effectively "done". |
+| `clipper2-js` (1.2.4) | 2D boolean ops (union / difference / even-odd) | Robust polygon booleans, the direct analogue of Shapely/GEOS. Pure TypeScript, no transitive deps. (Its `ClipperOffset` is **not** used — see below.) |
+| `js-angusj-clipper` (1.3.1) | cut-hole dilation (polygon offset only) | clipper2-js's offset produces spiral "curl" artifacts when dilating the overlapping artwork blobs (a smooth region becomes a sawtooth cut edge); the original, battle-tested Clipper (Angus Johnson v1) offsets it cleanly, matching Shapely. Inlined WASM (asm.js fallback), so it bundles + precaches like any JS and works offline. Loaded once in the worker; offsets are synchronous after. |
+| `delaunator` (5.1.0) | unconstrained Delaunay | Tiny, zero-dependency, stable. Used by the legacy `centroid` mesher. |
+| `poly2tri` (1.5.0) | constrained Delaunay triangulation | Powers the default `constrained` mesher: the design contour is a constraint edge so the cut edge follows the artwork smoothly. The same algorithm runs in the Python reference (`pypoly2tri`), keeping the two ports in lockstep. Pure JS, no transitive deps. |
 
 Everything else is the **platform**: SVG parsing via a small DOM-free parser,
 path flattening by the adaptive recursive-subdivision algorithm, the 3D preview

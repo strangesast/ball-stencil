@@ -31,10 +31,20 @@ uv run python -m ball_stencil splash.svg \
 
 ## How it works
 
-1. **`svgio`** — load filled `<path>`s, adaptively tessellate Béziers (chord
-   ≤ 0.10 mm), fold subpaths with even-odd to get the exact filled region.
-2. **`meshbuild`** — material = disc − filled splashes (the holes); densify
-   boundary + hex-lattice interior → Delaunay → keep triangles inside material.
+1. **`svgio`** — load filled `<path>`s, adaptively tessellate Béziers, fold
+   subpaths with even-odd to get the exact filled region.
+2. **`meshbuild`** — material = disc − filled splashes (the holes), then one of
+   two surface meshers (`MESH_STRATEGY`):
+   - **`constrained`** (default) — conforming Delaunay (poly2tri): the design
+     contour is a *constrained* boundary, so the **cut edge IS the artwork curve**
+     (smooth, ideal for tracing). Interior filled with a `TARGET_EDGE_MM` hex
+     lattice of Steiner points. The contour is flattened to the finer
+     `BOUNDARY_SMOOTHNESS_MM` budget and Douglas-Peucker reduced (decoupled from
+     triangle size, so coarser triangles never coarsen the drawn edge).
+   - **`centroid`** (legacy) — densify boundary + hex interior → *unconstrained*
+     Delaunay → keep triangles whose centroid is inside the material. The cut
+     edge is then a by-product of the centroid test and comes out faceted /
+     sawtoothed; kept for comparison and as a fallback.
 3. **`mapping`** — Lambert azimuthal **equal-area** parameterization: SVG centre →
    dome pole, `ρ ∝ sin(φ/2)`, scaled so the design radius lands at the cap angle.
    Every vertex maps to the inner (R + clearance) and outer (+ wall) radii.
@@ -53,8 +63,10 @@ uv run python -m ball_stencil splash.svg \
 | `WALL_THICKNESS_MM` | 2.0 | radial shell wall thickness |
 | `CAP_ANGLE_DEG` | 90 | how far down the ball the dome reaches |
 | `MAPPING` | `lambert` | equal-area wrap of the design onto the dome |
+| `MESH_STRATEGY` | `constrained` | surface mesher: `constrained` (smooth cut edge) or `centroid` (legacy faceted) |
+| `BOUNDARY_SMOOTHNESS_MM` | 0.04 | how closely the cut edge follows the design curve (constrained); decoupled from triangle size |
 | `TARGET_EDGE_MM` | 1.2 | nominal triangle edge on the sphere |
-| `CHORD_ERROR_MM` | 0.10 | Bézier flattening budget |
+| `CHORD_ERROR_MM` | 0.10 | Bézier flattening budget (centroid mesher) |
 | `CUT_SEPARATION_SVG` | 0.30 | hole dilation; clears pinches / thin webbing |
 | `MIN_ISLAND_AREA_MM2` | 1.0 | drop free islands below this (warns above) |
 
@@ -63,8 +75,12 @@ uv run python -m ball_stencil splash.svg \
 - **Free islands:** material fully enclosed by a hole (e.g. one enclosed region
   inside `splash_2`, ≈27 mm²) would fall out of a physical stencil. These are
   detected and reported; tune `MIN_ISLAND_AREA_MM2` or add a bridge to keep them.
-- **Sliver triangles:** ~7 % of faces along cut edges exceed the 5:1 aspect
-  target (inherent to point-cloud Delaunay). The mesh is watertight and
-  non-degenerate; a constrained Delaunay refinement (`triangle`/CGAL) would
-  tighten this if manufacturing requires it.
+- **Cut-edge smoothness:** the default `constrained` mesher keeps the traced cut
+  edge within `BOUNDARY_SMOOTHNESS_MM` (≈0.04 mm) of the true design curve — no
+  centroid sawtooth, no grid stair-steps. The legacy `centroid` mesher faceted
+  the edge to ~1 triangle edge; switch back with `MESH_STRATEGY=centroid` only
+  for comparison or as a fallback.
+- **Sliver triangles:** a thin band of higher-aspect triangles can remain along
+  the cut edge (denser boundary than interior). These are non-degenerate and do
+  not affect the traced edge, watertightness, or printability.
 - STEP/CAD export is not implemented (mesh output only).

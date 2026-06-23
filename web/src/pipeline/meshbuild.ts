@@ -10,6 +10,7 @@
  */
 
 import Delaunator from "delaunator";
+import { SweepContext } from "poly2tri";
 import type { Paths64 } from "clipper2-js";
 import { Clip, Part, partArea, partCentroid, PipIndex, BoundaryDist } from "./clip";
 import { Mapper } from "./mapping";
@@ -126,6 +127,291 @@ function snapUnique(points: number[][], grid: number): number[][] {
     out.push([gx * grid, gy * grid]);
   }
   return out;
+}
+
+// -- triangulation strategies ----------------------------------------------
+
+/** Legacy mesher: unconstrained Delaunay of sampled points, keep a triangle iff
+ *  its centroid is inside the material. The cut edge is then a by-product of the
+ *  centroid test and comes out faceted / sawtoothed. */
+function triangulateCentroid(
+  material: Paths64,
+  materialRings: number[][][],
+  p: Params,
+  spacing: number,
+  clip: Clip,
+): { triIdx: number[][]; planar: number[][] } {
+  const matIndex = new PipIndex(materialRings);
+  const grid = p.snap_grid_svg > 0 ? p.snap_grid_svg : 1e-6;
+  const bpts = clip.segmentizeCoords(material, spacing);
+  const ipts = interiorPoints(material, materialRings, matIndex, spacing, clip);
+  let pts = bpts.concat(ipts);
+  pts = snapUnique(pts, grid);
+
+  // Delaunay triangulate the point cloud.
+  const flat = new Float64Array(pts.length * 2);
+  for (let i = 0; i < pts.length; i++) {
+    flat[i * 2] = pts[i][0];
+    flat[i * 2 + 1] = pts[i][1];
+  }
+  const del = new Delaunator(flat);
+  const tIdx = del.triangles;
+
+  // weld planar vertices (keyed on the snap grid)
+  const vmap = new Map<number, number>(); // pts-index -> planar-index
+  const planar: number[][] = [];
+  const vidx = (pi: number): number => {
+    let i = vmap.get(pi);
+    if (i === undefined) {
+      i = planar.length;
+      vmap.set(pi, i);
+      planar.push(pts[pi]);
+    }
+    return i;
+  };
+
+  const triIdx: number[][] = [];
+  for (let t = 0; t < tIdx.length; t += 3) {
+    const i0 = tIdx[t], i1 = tIdx[t + 1], i2 = tIdx[t + 2];
+    const ax = pts[i0][0], ay = pts[i0][1];
+    const bx = pts[i1][0], by = pts[i1][1];
+    const cx2 = pts[i2][0], cy2 = pts[i2][1];
+    // keep iff centroid inside material
+    const gx = (ax + bx + cx2) / 3.0;
+    const gy = (ay + by + cy2) / 3.0;
+    if (!matIndex.contains(gx, gy)) continue;
+    const area2 = (bx - ax) * (cy2 - ay) - (cx2 - ax) * (by - ay);
+    let a = vidx(i0);
+    let b = vidx(i1);
+    let c = vidx(i2);
+    if (area2 < 0.0) {
+      const tmp = b;
+      b = c;
+      c = tmp;
+    }
+    triIdx.push([a, b, c]);
+  }
+  return { triIdx, planar };
+}
+
+/** Densify a closed ring so no edge exceeds `spacing` (keeps original vertices;
+ *  port of shapely.segmentize used as the constrained boundary). */
+function densifyRing(ring: number[][], spacing: number): number[][] {
+  const out: number[][] = [];
+  const n = ring.length;
+  for (let i = 0; i < n; i++) {
+    const a = ring[i];
+    const b = ring[(i + 1) % n];
+    out.push(a);
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (len > spacing) {
+      const segs = Math.ceil(len / spacing);
+      for (let s = 1; s < segs; s++) {
+        const t = s / segs;
+        out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+      }
+    }
+  }
+  return out;
+}
+
+/** Douglas-Peucker on the open chain `seq` (indices into `pts`); adds kept
+ *  indices to `keep`. Iterative. Port of ball_stencil.meshbuild._rdp_open. */
+function rdpOpen(pts: number[][], seq: number[], tol2: number, keep: Set<number>): void {
+  const stack: [number, number][] = [[0, seq.length - 1]];
+  while (stack.length) {
+    const [lo, hi] = stack.pop()!;
+    if (hi <= lo + 1) continue;
+    const [ax, ay] = pts[seq[lo]];
+    const [bx, by] = pts[seq[hi]];
+    const abx = bx - ax, aby = by - ay;
+    const ab2 = abx * abx + aby * aby;
+    let dmax = -1.0;
+    let idx = -1;
+    for (let k = lo + 1; k < hi; k++) {
+      const [px, py] = pts[seq[k]];
+      let d2: number;
+      if (ab2 > 1e-24) {
+        const cross = (px - ax) * aby - (py - ay) * abx;
+        d2 = (cross * cross) / ab2;
+      } else {
+        d2 = (px - ax) * (px - ax) + (py - ay) * (py - ay);
+      }
+      if (d2 > dmax) {
+        dmax = d2;
+        idx = k;
+      }
+    }
+    if (dmax > tol2) {
+      keep.add(seq[idx]);
+      stack.push([lo, idx]);
+      stack.push([idx, hi]);
+    }
+  }
+}
+
+/** Douglas-Peucker simplify a *closed* ring (open coords, no repeated end),
+ *  anchored at the lexicographically smallest vertex + the farthest from it so
+ *  the result is invariant to where the engine started the ring. Port of
+ *  ball_stencil.meshbuild._rdp_ring. */
+function rdpRing(pts: number[][], tol: number): number[][] {
+  const n = pts.length;
+  if (n <= 4) return pts;
+  let a0 = 0;
+  for (let i = 1; i < n; i++) {
+    if (pts[i][0] < pts[a0][0] || (pts[i][0] === pts[a0][0] && pts[i][1] < pts[a0][1])) a0 = i;
+  }
+  let a1 = 0;
+  let best = -1;
+  for (let i = 0; i < n; i++) {
+    const dx = pts[i][0] - pts[a0][0];
+    const dy = pts[i][1] - pts[a0][1];
+    const d = dx * dx + dy * dy;
+    if (d > best) {
+      best = d;
+      a1 = i;
+    }
+  }
+  if (a1 === a0) return pts;
+  const keep = new Set<number>([a0, a1]);
+  const arc = (lo: number, hi: number): number[] => {
+    const seq: number[] = [];
+    let i = lo;
+    for (;;) {
+      seq.push(i);
+      if (i === hi) break;
+      i = (i + 1) % n;
+    }
+    return seq;
+  };
+  const tol2 = tol * tol;
+  rdpOpen(pts, arc(a0, a1), tol2, keep);
+  rdpOpen(pts, arc(a1, a0), tol2, keep);
+  return [...keep].sort((x, y) => x - y).map((i) => pts[i]);
+}
+
+/** Drop points closer than `minD` to their predecessor; poly2tri rejects
+ *  coincident / sub-epsilon vertices. Returns null if fewer than 3 remain. */
+function cleanRing(ring: number[][], minD: number): number[][] | null {
+  if (ring.length < 3) return null;
+  const out: number[][] = [ring[0]];
+  for (let i = 1; i < ring.length; i++) {
+    const p = ring[i];
+    const q = out[out.length - 1];
+    if (Math.hypot(p[0] - q[0], p[1] - q[1]) > minD) out.push(p);
+  }
+  while (
+    out.length > 3 &&
+    Math.hypot(out[0][0] - out[out.length - 1][0], out[0][1] - out[out.length - 1][1]) <= minD
+  ) {
+    out.pop();
+  }
+  return out.length >= 3 ? out : null;
+}
+
+/** Interior hex-lattice Steiner points for one part (shell + holes), each held
+ *  back `holdback*spacing` from every boundary so none lands on a constraint. */
+function partSteiner(partRings: number[][][], spacing: number, holdback: number): number[][] {
+  const matIndex = new PipIndex(partRings);
+  const dist = new BoundaryDist(partRings);
+  let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+  for (const r of partRings)
+    for (const [x, y] of r) {
+      if (x < minx) minx = x;
+      if (x > maxx) maxx = x;
+      if (y < miny) miny = y;
+      if (y > maxy) maxy = y;
+    }
+  const dx = spacing;
+  const dy = (spacing * Math.sqrt(3)) / 2;
+  const rr = holdback * spacing;
+  const pts: number[][] = [];
+  let y = miny;
+  let row = 0;
+  while (y <= maxy + dy) {
+    const off = row % 2 ? dx / 2 : 0;
+    for (let x = minx + off; x < maxx + dx; x += dx) {
+      if (matIndex.contains(x, y) && dist.fartherThan(x, y, rr)) pts.push([x, y]);
+    }
+    y += dy;
+    row += 1;
+  }
+  return pts;
+}
+
+/** Conforming Delaunay (poly2tri): the material contour is a *constrained*
+ *  boundary, so the cut edge IS the design curve (no centroid sawtooth / facet
+ *  corner-cutting). Interior is filled with a TARGET_EDGE hex lattice as Steiner
+ *  points. Mirrors ball_stencil.meshbuild._triangulate_constrained. */
+function triangulateConstrained(
+  material: Paths64,
+  spacing: number,
+  bndTol: number,
+  clip: Clip,
+): { triIdx: number[][]; planar: number[][] } {
+  const minD = spacing * 0.02;
+  const planar: number[][] = [];
+  const vmap = new Map<string, number>();
+  const vidx = (x: number, y: number): number => {
+    const key = Math.round(x * 1e6) + "," + Math.round(y * 1e6);
+    let i = vmap.get(key);
+    if (i === undefined) {
+      i = planar.length;
+      vmap.set(key, i);
+      planar.push([x, y]);
+    }
+    return i;
+  };
+
+  // Per ring: dedupe -> RDP simplify (canonical, lockstep) -> densify long edges.
+  const prep = (ring: number[][]): number[][] | null => {
+    const cleaned = cleanRing(ring, minD);
+    if (!cleaned) return null;
+    return densifyRing(rdpRing(cleaned, bndTol), spacing);
+  };
+
+  const triIdx: number[][] = [];
+  for (const part of clip.parts(material)) {
+    const shell = prep(part.shell);
+    if (!shell) continue;
+    const holes: number[][][] = [];
+    const partRings: number[][][] = [shell];
+    for (const h of part.holes) {
+      const hr = prep(h);
+      if (hr) {
+        holes.push(hr);
+        partRings.push(hr);
+      }
+    }
+    const steiner = partSteiner(partRings, spacing, 0.6);
+
+    const swctx = new SweepContext(shell.map(([x, y]) => ({ x, y })));
+    for (const h of holes) swctx.addHole(h.map(([x, y]) => ({ x, y })));
+    for (const [x, y] of steiner) swctx.addPoint({ x, y });
+    swctx.triangulate();
+    for (const tr of swctx.getTriangles()) {
+      const p0 = tr.getPoint(0);
+      const p1 = tr.getPoint(1);
+      const p2 = tr.getPoint(2);
+      const area2 = (p1.x - p0.x) * (p2.y - p0.y) - (p2.x - p0.x) * (p1.y - p0.y);
+      let a = vidx(p0.x, p0.y);
+      let b = vidx(p1.x, p1.y);
+      let c = vidx(p2.x, p2.y);
+      if (area2 < 0.0) {
+        const tmp = b;
+        b = c;
+        c = tmp;
+      }
+      triIdx.push([a, b, c]);
+    }
+  }
+  if (triIdx.length === 0) {
+    throw new Error(
+      "constrained triangulation produced no triangles (material may be " +
+        "degenerate after cutting); check the SVG, design margin, or cut separation",
+    );
+  }
+  return { triIdx, planar };
 }
 
 // -- pinch-vertex splitting (port of _split_pinch_vertices) -----------------
@@ -325,9 +611,10 @@ export function buildShell(
   }
 
   const disc = clip.disc(cx, cy, rRef, 2048);
-  // difference at fine precision (no snap-slivers), then reduce to grid
-  // resolution (Shapely set_precision): snap per-contour + RDP-simplify at the
-  // grid tolerance, so the boundary vertex density matches the reference.
+  // difference at fine precision (no snap-slivers). For the legacy "centroid"
+  // mesher, reduce to grid resolution (Shapely set_precision): snap per-contour
+  // + RDP-simplify at the grid tolerance. For "constrained" the clip carries no
+  // snap grid, so these are no-ops and the contour stays at full precision.
   let material = clip.simplify(clip.snapContours(clip.compact(clip.difference(disc, cut))));
   if (clip.isEmpty(material)) {
     throw new Error(
@@ -342,57 +629,18 @@ export function buildShell(
   const spacing = p.target_edge_mm / scaleMid;
 
   const materialRings = clip.toRings(material);
-  const matIndex = new PipIndex(materialRings);
 
-  const grid = p.snap_grid_svg > 0 ? p.snap_grid_svg : 1e-6;
-  const bpts = clip.segmentizeCoords(material, spacing);
-  const ipts = interiorPoints(material, materialRings, matIndex, spacing, clip);
-  let pts = bpts.concat(ipts);
-  pts = snapUnique(pts, grid);
-
-  // Delaunay triangulate the point cloud.
-  const flat = new Float64Array(pts.length * 2);
-  for (let i = 0; i < pts.length; i++) {
-    flat[i * 2] = pts[i][0];
-    flat[i * 2 + 1] = pts[i][1];
-  }
-  const del = new Delaunator(flat);
-  const tIdx = del.triangles;
-
-  // weld planar vertices (keyed on the snap grid)
-  const vmap = new Map<number, number>(); // pts-index -> planar-index
-  const planar: number[][] = [];
-  const vidx = (pi: number): number => {
-    let i = vmap.get(pi);
-    if (i === undefined) {
-      i = planar.length;
-      vmap.set(pi, i);
-      planar.push(pts[pi]);
-    }
-    return i;
-  };
-
-  const triIdx: number[][] = [];
-  for (let t = 0; t < tIdx.length; t += 3) {
-    const i0 = tIdx[t], i1 = tIdx[t + 1], i2 = tIdx[t + 2];
-    const ax = pts[i0][0], ay = pts[i0][1];
-    const bx = pts[i1][0], by = pts[i1][1];
-    const cx2 = pts[i2][0], cy2 = pts[i2][1];
-    // keep iff centroid inside material
-    const gx = (ax + bx + cx2) / 3.0;
-    const gy = (ay + by + cy2) / 3.0;
-    if (!matIndex.contains(gx, gy)) continue;
-    const area2 = (bx - ax) * (cy2 - ay) - (cx2 - ax) * (by - ay);
-    let a = vidx(i0);
-    let b = vidx(i1);
-    let c = vidx(i2);
-    if (area2 < 0.0) {
-      const tmp = b;
-      b = c;
-      c = tmp;
-    }
-    triIdx.push([a, b, c]);
-  }
+  // --- triangulate the 2D material region ---------------------------------
+  // "constrained" reduces each contour to a canonical minimal vertex set
+  // (Douglas-Peucker) well inside the smoothness budget -- a *shared* RDP
+  // (identical in both ports) removes near-collinear flatten points whose
+  // density differs between Clipper2 and GEOS, keeping the cut edge smooth AND
+  // the two ports' vertex counts in lockstep.
+  const bndTol = (0.5 * p.boundary_smoothness_mm) / scaleMid;
+  const { triIdx, planar } =
+    p.mesh_strategy === "constrained"
+      ? triangulateConstrained(material, spacing, bndTol, clip)
+      : triangulateCentroid(material, materialRings, p, spacing, clip);
 
   // resolve non-manifold pinch vertices
   const [tris, planar2] = splitPinchVertices(triIdx, planar);

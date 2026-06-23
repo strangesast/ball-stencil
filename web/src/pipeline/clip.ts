@@ -24,6 +24,7 @@ import {
   Path64,
   Paths64,
 } from "clipper2-js";
+import { offsetInt } from "./offset";
 
 export type Ring = number[]; // flat [x0,y0,x1,y1,...] in SVG (float) units
 export interface Part {
@@ -116,14 +117,37 @@ export class Clip {
 
   /**
    * Round-join polygon offset (Shapely buffer). deltaSvg in SVG units.
-   * Uses an explicit arc tolerance (~12 segments/quadrant) — the static
-   * InflatePaths default is near-zero, which at fine scale explodes every round
-   * join into thousands of vertices and is catastrophically slow.
+   *
+   * Uses Clipper 1 (js-angusj-clipper) when loaded: clipper2-js's ClipperOffset
+   * produces spiral "curl" artifacts on this geometry (overlapping artwork
+   * blobs), which the constrained mesher traces as a sawtooth cut edge; the
+   * original Clipper offsets it cleanly, matching Shapely. Falls back to
+   * clipper2's ClipperOffset only if the native lib hasn't loaded.
    */
   inflate(paths: Paths64, deltaSvg: number): Paths64 {
     if (paths.length === 0) return new Paths64();
     const delta = deltaSvg * this.scale;
     const arcTol = Math.max(1, Math.abs(delta) * 0.01);
+
+    // Path64 points are already integers at this.scale; hand them to Clipper 1.
+    const c1in = paths.map((p) => p.map((pt) => ({ x: pt.x, y: pt.y })));
+    const c1out = offsetInt(c1in, delta, arcTol);
+    // c1out === null means the lib hasn't loaded; an empty array means it loaded
+    // but produced nothing for a non-empty positive dilation (a library edge
+    // case) — treat both as "Clipper 1 didn't help" and fall through to clipper2
+    // rather than returning an empty cut (which would leave the whole disc as
+    // material or trip the "material region is empty" error downstream).
+    if (c1out !== null && c1out.length > 0) {
+      const sol = new Paths64();
+      for (const ring of c1out) {
+        const flat: number[] = [];
+        for (const pt of ring) flat.push(pt.x, pt.y);
+        if (flat.length >= 6) sol.push(Clipper.makePath(flat));
+      }
+      if (sol.length > 0) return sol;
+    }
+
+    // Fallback (Clipper 1 not loaded or yielded nothing): clipper2 offset — curls.
     const co = new ClipperOffset(2.0, arcTol);
     co.addPaths(paths, JoinType.Round, EndType.Polygon);
     const sol = new Paths64();
@@ -342,6 +366,11 @@ export class BoundaryDist {
   private ne: number;
   private yMin: number; private slabH: number; private nSlabs: number;
   private slabs: Int32Array[];
+  // Reusable per-query "visited" stamps: stamp[e] === epoch means edge e was
+  // already tested this call. Avoids allocating a Set per fartherThan() query
+  // (called once per candidate Steiner point — thousands per build).
+  private stamp: Int32Array;
+  private epoch = 0;
 
   constructor(rings: number[][][]) {
     const ax: number[] = [], ay: number[] = [], bx: number[] = [], by: number[] = [];
@@ -372,6 +401,7 @@ export class BoundaryDist {
       for (let s = s0; s <= s1; s++) buckets[s].push(e);
     }
     this.slabs = buckets.map((b) => Int32Array.from(b));
+    this.stamp = new Int32Array(this.ne); // 0; first epoch is 1, so no false hits
   }
 
   /** True if the nearest boundary edge is at least r away (considering a y-band). */
@@ -381,13 +411,14 @@ export class BoundaryDist {
     let s1 = Math.floor((y + r - this.yMin) / this.slabH);
     if (s0 < 0) s0 = 0;
     if (s1 >= this.nSlabs) s1 = this.nSlabs - 1;
-    const seen = new Set<number>();
+    const epoch = ++this.epoch;
+    const stamp = this.stamp;
     for (let s = s0; s <= s1; s++) {
       const bucket = this.slabs[s];
       for (let k = 0; k < bucket.length; k++) {
         const e = bucket[k];
-        if (seen.has(e)) continue;
-        seen.add(e);
+        if (stamp[e] === epoch) continue;
+        stamp[e] = epoch;
         const vx = this.bx[e] - this.ax[e], vy = this.by[e] - this.ay[e];
         const wx = x - this.ax[e], wy = y - this.ay[e];
         const len2 = vx * vx + vy * vy;

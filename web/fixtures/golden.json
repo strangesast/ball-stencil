@@ -3,6 +3,191 @@
     {
       "svg": "splash.svg",
       "overrides": {},
+      "r_ref": 244.348051,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 105.4,
+      "center": [
+        221.19166,
+        221.191665
+      ],
+      "chord_error_mm": 0.04,
+      "spacing_svg": 1.840088,
+      "n_cut_regions": 51,
+      "n_components": 2,
+      "islands_mm2": [
+        47713.8754,
+        24.5365
+      ],
+      "n_vertices": 94838,
+      "n_faces": 189872,
+      "n_planar": 47419,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.194021,
+      "edge_len_max": 2.528271,
+      "max_aspect_ratio": 30.817431,
+      "signed_volume_mm3": 93664.0541,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "splash.svg",
+      "overrides": {
+        "wall_thickness_mm": 4.0
+      },
+      "r_ref": 244.348051,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 107.4,
+      "center": [
+        221.19166,
+        221.191665
+      ],
+      "chord_error_mm": 0.04,
+      "spacing_svg": 1.805822,
+      "n_cut_regions": 51,
+      "n_components": 2,
+      "islands_mm2": [
+        49541.525,
+        25.4766
+      ],
+      "n_vertices": 98280,
+      "n_faces": 196756,
+      "n_planar": 49140,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.282594,
+      "edge_len_max": 4.232734,
+      "max_aspect_ratio": 61.610206,
+      "signed_volume_mm3": 190948.086,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "splash.svg",
+      "overrides": {
+        "cap_angle_deg": 60.0
+      },
+      "r_ref": 244.348051,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 105.4,
+      "center": [
+        221.19166,
+        221.191665
+      ],
+      "chord_error_mm": 0.04,
+      "spacing_svg": 2.693613,
+      "n_cut_regions": 51,
+      "n_components": 2,
+      "islands_mm2": [
+        23860.9183,
+        12.2286
+      ],
+      "n_vertices": 46508,
+      "n_faces": 93212,
+      "n_planar": 23254,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.220255,
+      "edge_len_max": 2.488497,
+      "max_aspect_ratio": 29.780351,
+      "signed_volume_mm3": 46841.1541,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "splash.svg",
+      "overrides": {
+        "target_edge_mm": 2.5
+      },
+      "r_ref": 244.348051,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 105.4,
+      "center": [
+        221.19166,
+        221.191665
+      ],
+      "chord_error_mm": 0.04,
+      "spacing_svg": 3.833516,
+      "n_cut_regions": 51,
+      "n_components": 2,
+      "islands_mm2": [
+        47713.8754,
+        24.5365
+      ],
+      "n_vertices": 27042,
+      "n_faces": 54280,
+      "n_planar": 13521,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 2.252506,
+      "edge_len_max": 5.192008,
+      "max_aspect_ratio": 45.806568,
+      "signed_volume_mm3": 93652.3056,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "splash.svg",
+      "overrides": {
+        "sphere_diameter_mm": 180.0
+      },
+      "r_ref": 244.348051,
+      "inner_radius_mm": 90.4,
+      "outer_radius_mm": 92.4,
+      "center": [
+        221.19166,
+        221.191665
+      ],
+      "chord_error_mm": 0.04,
+      "spacing_svg": 2.098975,
+      "n_cut_regions": 51,
+      "n_components": 2,
+      "islands_mm2": [
+        36671.2355,
+        18.8482
+      ],
+      "n_vertices": 73780,
+      "n_faces": 147756,
+      "n_planar": 36890,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.197353,
+      "edge_len_max": 2.523345,
+      "max_aspect_ratio": 25.332475,
+      "signed_volume_mm3": 71794.0928,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "splash.svg",
+      "overrides": {
+        "mesh_strategy": "centroid"
+      },
       "r_ref": 244.285936,
       "inner_radius_mm": 103.4,
       "outer_radius_mm": 105.4,
@@ -28,7 +213,7 @@
       "n_nonmanifold_edges": 0,
       "max_radius_error_mm": 2.842170943040401e-14,
       "edge_len_min": 0.0,
-      "edge_len_mean": 1.176001,
+      "edge_len_mean": 1.176004,
       "edge_len_max": 2.553985,
       "max_aspect_ratio": 83.855468,
       "signed_volume_mm3": 93675.5006,
@@ -36,65 +221,25 @@
       "ok": true
     },
     {
-      "svg": "splash.svg",
-      "overrides": {
-        "wall_thickness_mm": 4.0
-      },
-      "r_ref": 244.285936,
-      "inner_radius_mm": 103.4,
-      "outer_radius_mm": 107.4,
-      "center": [
-        221.19166,
-        221.191665
-      ],
-      "chord_error_mm": 0.1,
-      "spacing_svg": 1.805363,
-      "n_cut_regions": 51,
-      "n_components": 2,
-      "islands_mm2": [
-        49542.2269,
-        25.0143
-      ],
-      "n_vertices": 105014,
-      "n_faces": 210200,
-      "n_planar": 52507,
-      "is_watertight": true,
-      "is_manifold": true,
-      "consistent_winding": true,
-      "n_boundary_edges": 0,
-      "n_nonmanifold_edges": 0,
-      "max_radius_error_mm": 2.842170943040401e-14,
-      "edge_len_min": 0.0,
-      "edge_len_mean": 1.291523,
-      "edge_len_max": 4.309375,
-      "max_aspect_ratio": 167.701877,
-      "signed_volume_mm3": 190971.6028,
-      "n_degenerate": 0,
-      "ok": true
-    },
-    {
-      "svg": "splash.svg",
-      "overrides": {
-        "cap_angle_deg": 60.0
-      },
-      "r_ref": 244.285936,
+      "svg": "splash_z.svg",
+      "overrides": {},
+      "r_ref": 125.459504,
       "inner_radius_mm": 103.4,
       "outer_radius_mm": 105.4,
       "center": [
         221.19166,
         221.191665
       ],
-      "chord_error_mm": 0.1,
-      "spacing_svg": 2.692928,
-      "n_cut_regions": 51,
-      "n_components": 2,
+      "chord_error_mm": 0.04,
+      "spacing_svg": 0.944786,
+      "n_cut_regions": 1,
+      "n_components": 1,
       "islands_mm2": [
-        23869.0825,
-        11.9754
+        45851.2362
       ],
-      "n_vertices": 53412,
-      "n_faces": 106996,
-      "n_planar": 26706,
+      "n_vertices": 85664,
+      "n_faces": 171328,
+      "n_planar": 42832,
       "is_watertight": true,
       "is_manifold": true,
       "consistent_winding": true,
@@ -102,90 +247,18 @@
       "n_nonmanifold_edges": 0,
       "max_radius_error_mm": 2.842170943040401e-14,
       "edge_len_min": 0.0,
-      "edge_len_mean": 1.184058,
-      "edge_len_max": 2.427337,
-      "max_aspect_ratio": 104.512639,
-      "signed_volume_mm3": 46860.0048,
-      "n_degenerate": 0,
-      "ok": true
-    },
-    {
-      "svg": "splash.svg",
-      "overrides": {
-        "target_edge_mm": 2.5
-      },
-      "r_ref": 244.285936,
-      "inner_radius_mm": 103.4,
-      "outer_radius_mm": 105.4,
-      "center": [
-        221.19166,
-        221.191665
-      ],
-      "chord_error_mm": 0.1,
-      "spacing_svg": 3.832542,
-      "n_cut_regions": 51,
-      "n_components": 2,
-      "islands_mm2": [
-        47715.1557,
-        24.0913
-      ],
-      "n_vertices": 33016,
-      "n_faces": 66204,
-      "n_planar": 16508,
-      "is_watertight": true,
-      "is_manifold": true,
-      "consistent_winding": true,
-      "n_boundary_edges": 0,
-      "n_nonmanifold_edges": 0,
-      "max_radius_error_mm": 2.842170943040401e-14,
-      "edge_len_min": 0.0,
-      "edge_len_mean": 2.096715,
-      "edge_len_max": 4.895797,
-      "max_aspect_ratio": 143.887625,
-      "signed_volume_mm3": 93658.7368,
-      "n_degenerate": 0,
-      "ok": true
-    },
-    {
-      "svg": "splash.svg",
-      "overrides": {
-        "sphere_diameter_mm": 180.0
-      },
-      "r_ref": 244.285936,
-      "inner_radius_mm": 90.4,
-      "outer_radius_mm": 92.4,
-      "center": [
-        221.19166,
-        221.191665
-      ],
-      "chord_error_mm": 0.1,
-      "spacing_svg": 2.098441,
-      "n_cut_regions": 51,
-      "n_components": 2,
-      "islands_mm2": [
-        36674.1667,
-        18.515
-      ],
-      "n_vertices": 80726,
-      "n_faces": 161624,
-      "n_planar": 40363,
-      "is_watertight": true,
-      "is_manifold": true,
-      "consistent_winding": true,
-      "n_boundary_edges": 0,
-      "n_nonmanifold_edges": 0,
-      "max_radius_error_mm": 2.842170943040401e-14,
-      "edge_len_min": 0.0,
-      "edge_len_mean": 1.175597,
-      "edge_len_max": 2.4359,
-      "max_aspect_ratio": 95.912706,
-      "signed_volume_mm3": 71805.0881,
+      "edge_len_mean": 1.166195,
+      "edge_len_max": 2.528271,
+      "max_aspect_ratio": 22.694849,
+      "signed_volume_mm3": 89956.7153,
       "n_degenerate": 0,
       "ok": true
     },
     {
       "svg": "splash_z.svg",
-      "overrides": {},
+      "overrides": {
+        "mesh_strategy": "centroid"
+      },
       "r_ref": 125.449746,
       "inner_radius_mm": 103.4,
       "outer_radius_mm": 105.4,
@@ -208,9 +281,9 @@
       "consistent_winding": true,
       "n_boundary_edges": 0,
       "n_nonmanifold_edges": 0,
-      "max_radius_error_mm": 2.842170943040401e-14,
+      "max_radius_error_mm": 4.263256414560601e-14,
       "edge_len_min": 0.0,
-      "edge_len_mean": 1.161265,
+      "edge_len_mean": 1.161264,
       "edge_len_max": 3.782837,
       "max_aspect_ratio": 36.53146,
       "signed_volume_mm3": 89954.9865,
@@ -220,6 +293,222 @@
     {
       "svg": "dot.svg",
       "overrides": {},
+      "r_ref": 31.8,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 105.4,
+      "center": [
+        100.0,
+        100.0
+      ],
+      "chord_error_mm": 0.04,
+      "spacing_svg": 0.239473,
+      "n_cut_regions": 1,
+      "n_components": 1,
+      "islands_mm2": [
+        6435.8443
+      ],
+      "n_vertices": 13624,
+      "n_faces": 27248,
+      "n_planar": 6812,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.30014,
+      "edge_len_max": 2.528271,
+      "max_aspect_ratio": 3.908828,
+      "signed_volume_mm3": 12615.1665,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "dot.svg",
+      "overrides": {
+        "wall_thickness_mm": 4.0
+      },
+      "r_ref": 31.8,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 107.4,
+      "center": [
+        100.0,
+        100.0
+      ],
+      "chord_error_mm": 0.04,
+      "spacing_svg": 0.235014,
+      "n_cut_regions": 1,
+      "n_components": 1,
+      "islands_mm2": [
+        6682.4062
+      ],
+      "n_vertices": 14060,
+      "n_faces": 28120,
+      "n_planar": 7030,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.478928,
+      "edge_len_max": 4.051939,
+      "max_aspect_ratio": 6.412798,
+      "signed_volume_mm3": 25718.3573,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "dot.svg",
+      "overrides": {
+        "cap_angle_deg": 60.0
+      },
+      "r_ref": 31.8,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 105.4,
+      "center": [
+        100.0,
+        100.0
+      ],
+      "chord_error_mm": 0.04,
+      "spacing_svg": 0.350553,
+      "n_cut_regions": 1,
+      "n_components": 1,
+      "islands_mm2": [
+        3227.324
+      ],
+      "n_vertices": 6786,
+      "n_faces": 13572,
+      "n_planar": 3393,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.310617,
+      "edge_len_max": 2.182407,
+      "max_aspect_ratio": 2.922406,
+      "signed_volume_mm3": 6326.4507,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "dot.svg",
+      "overrides": {
+        "target_edge_mm": 2.5
+      },
+      "r_ref": 31.8,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 105.4,
+      "center": [
+        100.0,
+        100.0
+      ],
+      "chord_error_mm": 0.04,
+      "spacing_svg": 0.498902,
+      "n_cut_regions": 1,
+      "n_components": 1,
+      "islands_mm2": [
+        6435.8443
+      ],
+      "n_vertices": 3682,
+      "n_faces": 7364,
+      "n_planar": 1841,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 2.482199,
+      "edge_len_max": 5.192008,
+      "max_aspect_ratio": 4.013792,
+      "signed_volume_mm3": 12612.4152,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "dot.svg",
+      "overrides": {
+        "sphere_diameter_mm": 180.0
+      },
+      "r_ref": 31.8,
+      "inner_radius_mm": 90.4,
+      "outer_radius_mm": 92.4,
+      "center": [
+        100.0,
+        100.0
+      ],
+      "chord_error_mm": 0.04,
+      "spacing_svg": 0.273165,
+      "n_cut_regions": 1,
+      "n_components": 1,
+      "islands_mm2": [
+        4946.161
+      ],
+      "n_vertices": 10164,
+      "n_faces": 20328,
+      "n_planar": 5082,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.318212,
+      "edge_len_max": 2.523345,
+      "max_aspect_ratio": 3.299759,
+      "signed_volume_mm3": 9669.0242,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "dot.svg",
+      "overrides": {
+        "fit_clearance_mm": 1.0
+      },
+      "r_ref": 31.8,
+      "inner_radius_mm": 104.0,
+      "outer_radius_mm": 106.0,
+      "center": [
+        100.0,
+        100.0
+      ],
+      "chord_error_mm": 0.04,
+      "spacing_svg": 0.238118,
+      "n_cut_regions": 1,
+      "n_components": 1,
+      "islands_mm2": [
+        6509.3263
+      ],
+      "n_vertices": 13742,
+      "n_faces": 27484,
+      "n_planar": 6871,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.300145,
+      "edge_len_max": 2.525902,
+      "max_aspect_ratio": 3.868621,
+      "signed_volume_mm3": 12760.589,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "dot.svg",
+      "overrides": {
+        "mesh_strategy": "centroid"
+      },
       "r_ref": 31.825606,
       "inner_radius_mm": 103.4,
       "outer_radius_mm": 105.4,
@@ -244,7 +533,7 @@
       "n_nonmanifold_edges": 0,
       "max_radius_error_mm": 2.842170943040401e-14,
       "edge_len_min": 0.0,
-      "edge_len_mean": 1.249576,
+      "edge_len_mean": 1.24953,
       "edge_len_max": 5.469536,
       "max_aspect_ratio": 12.330452,
       "signed_volume_mm3": 12902.173,
@@ -252,206 +541,26 @@
       "ok": true
     },
     {
-      "svg": "dot.svg",
-      "overrides": {
-        "wall_thickness_mm": 4.0
-      },
-      "r_ref": 31.825606,
-      "inner_radius_mm": 103.4,
-      "outer_radius_mm": 107.4,
-      "center": [
-        100.0,
-        100.0
-      ],
-      "chord_error_mm": 0.1,
-      "spacing_svg": 0.235203,
-      "n_cut_regions": 1,
-      "n_components": 1,
-      "islands_mm2": [
-        6812.1951
-      ],
-      "n_vertices": 16756,
-      "n_faces": 33440,
-      "n_planar": 8378,
-      "is_watertight": true,
-      "is_manifold": true,
-      "consistent_winding": true,
-      "n_boundary_edges": 0,
-      "n_nonmanifold_edges": 0,
-      "max_radius_error_mm": 2.842170943040401e-14,
-      "edge_len_min": 0.0,
-      "edge_len_mean": 1.473389,
-      "edge_len_max": 6.512111,
-      "max_aspect_ratio": 24.599217,
-      "signed_volume_mm3": 26303.6926,
-      "n_degenerate": 0,
-      "ok": true
-    },
-    {
-      "svg": "dot.svg",
-      "overrides": {
-        "cap_angle_deg": 60.0
-      },
-      "r_ref": 31.825606,
-      "inner_radius_mm": 103.4,
-      "outer_radius_mm": 105.4,
-      "center": [
-        100.0,
-        100.0
-      ],
-      "chord_error_mm": 0.1,
-      "spacing_svg": 0.350835,
-      "n_cut_regions": 1,
-      "n_components": 1,
-      "islands_mm2": [
-        3280.4222
-      ],
-      "n_vertices": 9870,
-      "n_faces": 19668,
-      "n_planar": 4935,
-      "is_watertight": true,
-      "is_manifold": true,
-      "consistent_winding": true,
-      "n_boundary_edges": 0,
-      "n_nonmanifold_edges": 0,
-      "max_radius_error_mm": 2.842170943040401e-14,
-      "edge_len_min": 0.0,
-      "edge_len_mean": 1.220291,
-      "edge_len_max": 4.84189,
-      "max_aspect_ratio": 14.561717,
-      "signed_volume_mm3": 6452.789,
-      "n_degenerate": 0,
-      "ok": true
-    },
-    {
-      "svg": "dot.svg",
-      "overrides": {
-        "target_edge_mm": 2.5
-      },
-      "r_ref": 31.825606,
-      "inner_radius_mm": 103.4,
-      "outer_radius_mm": 105.4,
-      "center": [
-        100.0,
-        100.0
-      ],
-      "chord_error_mm": 0.1,
-      "spacing_svg": 0.499304,
-      "n_cut_regions": 1,
-      "n_components": 1,
-      "islands_mm2": [
-        6560.8444
-      ],
-      "n_vertices": 6980,
-      "n_faces": 13888,
-      "n_planar": 3490,
-      "is_watertight": true,
-      "is_manifold": true,
-      "consistent_winding": true,
-      "n_boundary_edges": 0,
-      "n_nonmanifold_edges": 0,
-      "max_radius_error_mm": 2.842170943040401e-14,
-      "edge_len_min": 0.0,
-      "edge_len_mean": 1.972413,
-      "edge_len_max": 5.469536,
-      "max_aspect_ratio": 29.645207,
-      "signed_volume_mm3": 12876.1947,
-      "n_degenerate": 0,
-      "ok": true
-    },
-    {
-      "svg": "dot.svg",
-      "overrides": {
-        "sphere_diameter_mm": 180.0
-      },
-      "r_ref": 31.825606,
-      "inner_radius_mm": 90.4,
-      "outer_radius_mm": 92.4,
-      "center": [
-        100.0,
-        100.0
-      ],
-      "chord_error_mm": 0.1,
-      "spacing_svg": 0.273385,
-      "n_cut_regions": 1,
-      "n_components": 1,
-      "islands_mm2": [
-        5042.2277
-      ],
-      "n_vertices": 13398,
-      "n_faces": 26724,
-      "n_planar": 6699,
-      "is_watertight": true,
-      "is_manifold": true,
-      "consistent_winding": true,
-      "n_boundary_edges": 0,
-      "n_nonmanifold_edges": 0,
-      "max_radius_error_mm": 2.842170943040401e-14,
-      "edge_len_min": 0.0,
-      "edge_len_mean": 1.256569,
-      "edge_len_max": 4.884974,
-      "max_aspect_ratio": 15.322259,
-      "signed_volume_mm3": 9888.6434,
-      "n_degenerate": 0,
-      "ok": true
-    },
-    {
-      "svg": "dot.svg",
-      "overrides": {
-        "fit_clearance_mm": 1.0
-      },
-      "r_ref": 31.825606,
-      "inner_radius_mm": 104.0,
-      "outer_radius_mm": 106.0,
-      "center": [
-        100.0,
-        100.0
-      ],
-      "chord_error_mm": 0.1,
-      "spacing_svg": 0.238309,
-      "n_cut_regions": 1,
-      "n_components": 1,
-      "islands_mm2": [
-        6635.7535
-      ],
-      "n_vertices": 16486,
-      "n_faces": 32900,
-      "n_planar": 8243,
-      "is_watertight": true,
-      "is_manifold": true,
-      "consistent_winding": true,
-      "n_boundary_edges": 0,
-      "n_nonmanifold_edges": 0,
-      "max_radius_error_mm": 2.842170943040401e-14,
-      "edge_len_min": 0.0,
-      "edge_len_mean": 1.249352,
-      "edge_len_max": 5.49678,
-      "max_aspect_ratio": 12.420953,
-      "signed_volume_mm3": 13050.0711,
-      "n_degenerate": 0,
-      "ok": true
-    },
-    {
       "svg": "ring.svg",
       "overrides": {},
-      "r_ref": 42.432384,
+      "r_ref": 42.4,
       "inner_radius_mm": 103.4,
       "outer_radius_mm": 105.4,
       "center": [
         100.0,
         100.0
       ],
-      "chord_error_mm": 0.1,
-      "spacing_svg": 0.319541,
+      "chord_error_mm": 0.04,
+      "spacing_svg": 0.319298,
       "n_cut_regions": 1,
       "n_components": 2,
       "islands_mm2": [
-        15045.7098,
-        6861.3057
+        15062.0269,
+        6749.1669
       ],
-      "n_vertices": 44866,
-      "n_faces": 89676,
-      "n_planar": 22433,
+      "n_vertices": 42326,
+      "n_faces": 84648,
+      "n_planar": 21163,
       "is_watertight": true,
       "is_manifold": true,
       "consistent_winding": true,
@@ -459,10 +568,10 @@
       "n_nonmanifold_edges": 0,
       "max_radius_error_mm": 2.842170943040401e-14,
       "edge_len_min": 0.0,
-      "edge_len_mean": 1.171567,
-      "edge_len_max": 3.808157,
-      "max_aspect_ratio": 15.526205,
-      "signed_volume_mm3": 43020.3699,
+      "edge_len_mean": 1.181602,
+      "edge_len_max": 2.528271,
+      "max_aspect_ratio": 3.908828,
+      "signed_volume_mm3": 42784.888,
       "n_degenerate": 0,
       "ok": true
     },
@@ -471,6 +580,80 @@
       "overrides": {
         "min_island_area_mm2": 0.0
       },
+      "r_ref": 42.4,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 105.4,
+      "center": [
+        100.0,
+        100.0
+      ],
+      "chord_error_mm": 0.04,
+      "spacing_svg": 0.319298,
+      "n_cut_regions": 1,
+      "n_components": 2,
+      "islands_mm2": [
+        15062.0269,
+        6749.1669
+      ],
+      "n_vertices": 42326,
+      "n_faces": 84648,
+      "n_planar": 21163,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.181602,
+      "edge_len_max": 2.528271,
+      "max_aspect_ratio": 3.908828,
+      "signed_volume_mm3": 42784.888,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "ring.svg",
+      "overrides": {
+        "wall_thickness_mm": 4.0
+      },
+      "r_ref": 42.4,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 107.4,
+      "center": [
+        100.0,
+        100.0
+      ],
+      "chord_error_mm": 0.04,
+      "spacing_svg": 0.313352,
+      "n_cut_regions": 1,
+      "n_components": 2,
+      "islands_mm2": [
+        15639.0641,
+        7007.7324
+      ],
+      "n_vertices": 43820,
+      "n_faces": 87636,
+      "n_planar": 21910,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.247411,
+      "edge_len_max": 4.079714,
+      "max_aspect_ratio": 6.415475,
+      "signed_volume_mm3": 87224.8586,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "ring.svg",
+      "overrides": {
+        "mesh_strategy": "centroid"
+      },
       "r_ref": 42.432384,
       "inner_radius_mm": 103.4,
       "outer_radius_mm": 105.4,
@@ -496,36 +679,33 @@
       "n_nonmanifold_edges": 0,
       "max_radius_error_mm": 2.842170943040401e-14,
       "edge_len_min": 0.0,
-      "edge_len_mean": 1.171567,
+      "edge_len_mean": 1.17154,
       "edge_len_max": 3.808157,
       "max_aspect_ratio": 15.526205,
-      "signed_volume_mm3": 43020.3699,
+      "signed_volume_mm3": 43020.37,
       "n_degenerate": 0,
       "ok": true
     },
     {
-      "svg": "ring.svg",
-      "overrides": {
-        "wall_thickness_mm": 4.0
-      },
-      "r_ref": 42.432384,
+      "svg": "multi.svg",
+      "overrides": {},
+      "r_ref": 84.8,
       "inner_radius_mm": 103.4,
-      "outer_radius_mm": 107.4,
+      "outer_radius_mm": 105.4,
       "center": [
-        100.0,
-        100.0
+        150.0,
+        150.0
       ],
-      "chord_error_mm": 0.1,
-      "spacing_svg": 0.313591,
-      "n_cut_regions": 1,
-      "n_components": 2,
+      "chord_error_mm": 0.04,
+      "spacing_svg": 0.638595,
+      "n_cut_regions": 4,
+      "n_components": 1,
       "islands_mm2": [
-        15622.1219,
-        7124.1673
+        53807.0317
       ],
-      "n_vertices": 46374,
-      "n_faces": 92692,
-      "n_planar": 23187,
+      "n_vertices": 100434,
+      "n_faces": 200880,
+      "n_planar": 50217,
       "is_watertight": true,
       "is_manifold": true,
       "consistent_winding": true,
@@ -533,16 +713,54 @@
       "n_nonmanifold_edges": 0,
       "max_radius_error_mm": 2.842170943040401e-14,
       "edge_len_min": 0.0,
-      "edge_len_mean": 1.254626,
-      "edge_len_max": 5.167334,
-      "max_aspect_ratio": 31.003443,
-      "signed_volume_mm3": 87705.1145,
+      "edge_len_mean": 1.158269,
+      "edge_len_max": 2.528271,
+      "max_aspect_ratio": 3.908828,
+      "signed_volume_mm3": 105567.653,
       "n_degenerate": 0,
       "ok": true
     },
     {
       "svg": "multi.svg",
-      "overrides": {},
+      "overrides": {
+        "cap_angle_deg": 60.0
+      },
+      "r_ref": 84.8,
+      "inner_radius_mm": 103.4,
+      "outer_radius_mm": 105.4,
+      "center": [
+        150.0,
+        150.0
+      ],
+      "chord_error_mm": 0.04,
+      "spacing_svg": 0.934807,
+      "n_cut_regions": 4,
+      "n_components": 1,
+      "islands_mm2": [
+        26912.938
+      ],
+      "n_vertices": 47548,
+      "n_faces": 95108,
+      "n_planar": 23774,
+      "is_watertight": true,
+      "is_manifold": true,
+      "consistent_winding": true,
+      "n_boundary_edges": 0,
+      "n_nonmanifold_edges": 0,
+      "max_radius_error_mm": 2.842170943040401e-14,
+      "edge_len_min": 0.0,
+      "edge_len_mean": 1.177325,
+      "edge_len_max": 2.184394,
+      "max_aspect_ratio": 2.979267,
+      "signed_volume_mm3": 52803.1735,
+      "n_degenerate": 0,
+      "ok": true
+    },
+    {
+      "svg": "multi.svg",
+      "overrides": {
+        "mesh_strategy": "centroid"
+      },
       "r_ref": 84.8,
       "inner_radius_mm": 103.4,
       "outer_radius_mm": 105.4,
@@ -571,42 +789,6 @@
       "edge_len_max": 3.773628,
       "max_aspect_ratio": 31.201915,
       "signed_volume_mm3": 105605.6379,
-      "n_degenerate": 0,
-      "ok": true
-    },
-    {
-      "svg": "multi.svg",
-      "overrides": {
-        "cap_angle_deg": 60.0
-      },
-      "r_ref": 84.8,
-      "inner_radius_mm": 103.4,
-      "outer_radius_mm": 105.4,
-      "center": [
-        150.0,
-        150.0
-      ],
-      "chord_error_mm": 0.1,
-      "spacing_svg": 0.934807,
-      "n_cut_regions": 4,
-      "n_components": 1,
-      "islands_mm2": [
-        26907.2987
-      ],
-      "n_vertices": 50818,
-      "n_faces": 101572,
-      "n_planar": 25409,
-      "is_watertight": true,
-      "is_manifold": true,
-      "consistent_winding": true,
-      "n_boundary_edges": 0,
-      "n_nonmanifold_edges": 0,
-      "max_radius_error_mm": 2.842170943040401e-14,
-      "edge_len_min": 0.0,
-      "edge_len_mean": 1.166927,
-      "edge_len_max": 3.41798,
-      "max_aspect_ratio": 37.239771,
-      "signed_volume_mm3": 52799.473,
       "n_degenerate": 0,
       "ok": true
     }

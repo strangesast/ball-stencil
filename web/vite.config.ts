@@ -13,6 +13,18 @@ export default defineConfig({
   worker: {
     format: "es",
   },
+  // poly2tri's UMD module references Node's `global` (no-conflict bookkeeping),
+  // which is undefined in the browser worker and throws at import time. Map it to
+  // globalThis for both the app build (rollup) and the dev pre-bundle (esbuild).
+  // (No source file uses a bare `global`, so this define is safe.)
+  define: { global: "globalThis" },
+  // These run only inside the geometry worker, so Vite discovers them lazily on
+  // the first build and then re-optimizes + reloads mid-session (a one-time
+  // "building forever" stall in dev). Pre-bundle them at server start instead.
+  optimizeDeps: {
+    include: ["clipper2-js", "delaunator", "poly2tri", "js-angusj-clipper", "workbox-window"],
+    esbuildOptions: { define: { global: "globalThis" } },
+  },
   plugins: [
     VitePWA({
       // We author src/sw.ts ourselves; the plugin only injects the precache
@@ -26,7 +38,7 @@ export default defineConfig({
       injectManifest: {
         // Precache the whole shell. The lazy ~97 kB pipeline chunk is bigger
         // than the 2 KB-ish default cap implies, but well under this ceiling.
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        globPatterns: ["**/*.{js,css,html,ico,png,jpg,svg,woff2}"],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },
       manifest: {

@@ -9,7 +9,7 @@ export const SVG_DIR = join(FIX_DIR, "svg");
 
 export interface GoldenCase {
   svg: string;
-  overrides: Record<string, number>;
+  overrides: Record<string, number | string>;
   r_ref: number;
   inner_radius_mm: number;
   outer_radius_mm: number;
@@ -39,7 +39,7 @@ export interface GoldenCase {
 
 export interface GoldenErr {
   svg: string;
-  overrides: Record<string, number>;
+  overrides: Record<string, number | string>;
   error: string | null;
 }
 

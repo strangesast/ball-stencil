@@ -43,6 +43,8 @@ function sanitizeParams(p: unknown): Params {
         out.design_reference_radius = null;
       } else if (k === "mapping" && typeof v === "string") {
         out.mapping = v;
+      } else if (k === "mesh_strategy" && (v === "constrained" || v === "centroid")) {
+        out.mesh_strategy = v;
       }
     }
   }

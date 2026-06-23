@@ -6,7 +6,7 @@
  * UV sphere for the translucent preview.
  */
 import { DEFAULT_PARAMS, Params, validateParams, ballRadius } from "./pipeline/config";
-import { uvSphere } from "./pipeline/exportmesh";
+import { uvSphereTextured } from "./pipeline/exportmesh";
 import { Viewer } from "./viewer";
 import { Sheets } from "./ui/sheet";
 import { loadState, saveMeta, saveSvg } from "./persist";
@@ -15,7 +15,7 @@ import type { MeshReport } from "./pipeline/meshcheck";
 import type { BuildInfo } from "./worker";
 
 // -- parameter schema (every parameter is user-configurable) ----------------
-interface Ctl { key: keyof Params; label: string; unit?: string; step?: number; min?: number; help: string; }
+interface Ctl { key: keyof Params; label: string; unit?: string; step?: number; min?: number; help: string; options?: { value: string; label: string }[]; }
 interface Grp { name: string; ctls: Ctl[]; }
 const GROUPS: Grp[] = [
   { name: "Ball / shell", ctls: [
@@ -30,8 +30,13 @@ const GROUPS: Grp[] = [
     { key: "flip_v", label: "Flip V (un-mirror)", help: "Flip vertically to un-mirror the artwork." },
   ]},
   { name: "Tessellation / meshing", ctls: [
+    { key: "mesh_strategy", label: "Mesh strategy", help: "Constrained = smooth poly2tri cut edge (follows the artwork). Centroid = legacy faceted edge.", options: [
+      { value: "constrained", label: "Constrained (smooth)" },
+      { value: "centroid", label: "Centroid (legacy)" },
+    ]},
+    { key: "boundary_smoothness_mm", label: "Edge smoothness", unit: "mm", step: 0.01, min: 0.001, help: "How closely the cut edge follows the design curve (constrained only)." },
     { key: "target_edge_mm", label: "Target edge", unit: "mm", step: 0.1, min: 0.001, help: "Target triangle edge; smaller = denser mesh." },
-    { key: "chord_error_mm", label: "Chord error", unit: "mm", step: 0.01, min: 0.001, help: "Max curve-flattening deviation." },
+    { key: "chord_error_mm", label: "Chord error", unit: "mm", step: 0.01, min: 0.001, help: "Max curve-flattening deviation (centroid only)." },
     { key: "min_segment_mm", label: "Min segment", unit: "mm", step: 0.01, min: 0, help: "Shortest segment when flattening curves." },
   ]},
   { name: "Cleanup", ctls: [
@@ -53,6 +58,7 @@ let expandedGroups = new Set<string>(restored?.expandedGroups ?? []);
 let jobId = 0;
 
 const viewer = new Viewer($("gl") as HTMLCanvasElement);
+viewer.setBallTexture(import.meta.env.BASE_URL + "ball_optx.jpg");
 const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
 const sheets = new Sheets();
 
@@ -74,7 +80,9 @@ worker.onmessage = (e: MessageEvent) => {
     onResult(m.report as MeshReport, m.ok as boolean, m.info as BuildInfo,
       new Float32Array(m.positions), new Uint32Array(m.indices), m.ballRadius as number);
   } else if (m.type === "error") {
-    if (m.jobId !== jobId) return;
+    // jobId === -1 is an escaped/global worker error not tied to a build; always
+    // surface it. Otherwise drop errors from superseded builds.
+    if (m.jobId !== -1 && m.jobId !== jobId) return;
     showError(m.message as string);
   } else if (m.type === "export") {
     finishDownload(m.kind as string, m.buffer as ArrayBuffer);
@@ -83,10 +91,19 @@ worker.onmessage = (e: MessageEvent) => {
   }
 };
 
-/** Refresh the translucent reference ball to the current sphere diameter. */
+// Final safety net: a worker that fails to load/instantiate (or any error the
+// worker itself couldn't post) must not leave the badge stuck on "building…".
+worker.onerror = (e) => {
+  showError(`worker crashed: ${e.message || "unknown error"}`);
+};
+worker.onmessageerror = () => {
+  showError("worker message could not be deserialized");
+};
+
+/** Refresh the textured reference ball to the current sphere diameter. */
 function refreshBall() {
-  const { vertices, faces } = uvSphere(ballRadius(params), 96, 48);
-  viewer.setBall(Float32Array.from(vertices), Uint32Array.from(faces));
+  const { vertices, faces, uvs } = uvSphereTextured(ballRadius(params), 96, 48);
+  viewer.setBall(Float32Array.from(vertices), Uint32Array.from(faces), Float32Array.from(uvs));
 }
 
 function build() {
@@ -229,7 +246,21 @@ function buildPanel() {
     for (const c of g.ctls) {
       const val = params[c.key];
       const field = document.createElement("div");
-      if (typeof val === "boolean") {
+      if (c.options) {
+        field.className = "field";
+        const opts = c.options
+          .map((o) => `<option value="${o.value}"${o.value === val ? " selected" : ""}>${o.label}</option>`)
+          .join("");
+        field.innerHTML = `<label for="p-${c.key}">${c.label}</label>
+          <select id="p-${c.key}">${opts}</select>
+          <div class="help">${c.help}</div>`;
+        body.appendChild(field);
+        field.querySelector("select")!.addEventListener("change", (e) => {
+          (params as unknown as Record<string, unknown>)[c.key] = (e.target as HTMLSelectElement).value;
+          persist();
+          scheduleBuild();
+        });
+      } else if (typeof val === "boolean") {
         field.className = "field check";
         field.innerHTML = `<label for="p-${c.key}">${c.label}</label>
           <input type="checkbox" id="p-${c.key}" ${val ? "checked" : ""} />

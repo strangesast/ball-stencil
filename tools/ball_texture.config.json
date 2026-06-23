@@ -1,0 +1,43 @@
+{
+  "_convention": "orthographic sphere; cx,cy,radius in native image px. Orientation q=[x,y,z,w] is a unit quaternion mapping body->camera; camera looks down -Z (+z_cam toward viewer); q=identity puts +Z (TOP) at camera. Body axes: +X=FRONT, -X=BACK, +Y=SIDE 1, -Y=SIDE 2, +Z=TOP, -Z=VALVE(South pole). Panels: 18-panel gnomonic spherical cube (6 faces x 3 strips, cyclic cut axes X->Z,Y->X,Z->Y; weave swaps chirality). Every seam is a cube straight line projected to the sphere (great-circle arc); watertight at width=1. strip = center-strip width (divider position along the cut axis); width = strip length (run half-extent; 1.0 = watertight cube, >1 extends strips past the cube edge).",
+  "model": {
+    "strip": 0.275,
+    "width": 1.77,
+    "weave": true
+  },
+  "photos": {
+    "optx_front.jpg": {
+      "cx": 602,
+      "cy": 609,
+      "radius": 597,
+      "q": [
+        0,
+        -0.7071067811865475,
+        0,
+        0.7071067811865476
+      ]
+    },
+    "optx_back.jpg": {
+      "cx": 600,
+      "cy": 600,
+      "radius": 596,
+      "q": [
+        -0.4999999999999999,
+        0.5,
+        0.5,
+        0.5000000000000001
+      ]
+    },
+    "optx_bottom.jpg": {
+      "cx": 600,
+      "cy": 600,
+      "radius": 599,
+      "q": [
+        1,
+        0,
+        0,
+        6.123233995736766e-17
+      ]
+    }
+  }
+}

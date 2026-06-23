@@ -163,6 +163,20 @@ test("no external network requests after initial load", async ({ page }) => {
   expect(external, external.join("\n")).toHaveLength(0);
 });
 
+test("a worker-side build failure surfaces as FAIL, not a stuck 'building…' badge", async ({ page }) => {
+  await page.goto("/");
+  await loadSvg(page, "splash.svg");
+  await expect(page.locator("#badge")).toHaveText("PASS", { timeout: 40000 });
+
+  // Cut separation of 100 svg units empties the material -> the worker throws.
+  // The error must propagate: badge flips to FAIL and the message is shown
+  // (regression guard for the silent "Uncaught (in promise)" worker hang).
+  await setParam(page, "cut_separation_svg", "100");
+  await expect(page.locator("#badge")).toHaveText("FAIL", { timeout: 40000 });
+  const body = await readReport(page);
+  expect(body).toMatch(/material region is empty/i);
+});
+
 test("splash_z builds a single-hole, single-component stencil (no island)", async ({ page }) => {
   await page.goto("/");
   await loadSvg(page, "splash_z.svg");

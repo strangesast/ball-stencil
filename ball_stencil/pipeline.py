@@ -41,15 +41,26 @@ def run(cfg: Config | None = None, *, verbose: bool = True) -> PipelineResult:
     cfg.validate()
     log = print if verbose else (lambda *a, **k: None)
 
-    # --- 1. load + tessellate (two passes to honour the chord-error budget) --
+    # --- 1. load + tessellate (two passes to honour the smoothness budget) ---
+    # The "constrained" mesher uses the flattened contour verbatim as the cut
+    # edge, so it flattens to the (finer) boundary-smoothness budget and does NOT
+    # grid-snap the contour (snapping would re-introduce stair-steps). The legacy
+    # "centroid" mesher keeps the manufacturing chord budget + topology snap grid.
+    if cfg.mesh_strategy == "constrained":
+        flatten_budget_mm = cfg.boundary_smoothness_mm
+        load_snap = 0.0
+    else:
+        flatten_budget_mm = cfg.chord_error_mm
+        load_snap = cfg.snap_grid_svg
+
     provisional_tol = 0.2  # SVG units
-    art = load_artwork(cfg.svg_path, provisional_tol, cfg.snap_grid_svg)
+    art = load_artwork(cfg.svg_path, provisional_tol, load_snap)
 
     # Lock scale + centre to a reference SVG so designs sharing a coordinate
     # system register identically on the sphere ("scale must match exactly").
     if cfg.match_svg:
         from .meshbuild import _region_max_radius
-        ref = load_artwork(cfg.match_svg, provisional_tol, cfg.snap_grid_svg)
+        ref = load_artwork(cfg.match_svg, provisional_tol, load_snap)
         ref_center = np.asarray(cfg.design_center_uv or ref.center, dtype=np.float64)
         cfg.design_reference_radius = _region_max_radius(ref.region, ref_center) * cfg.design_margin
         cfg.design_center_uv = tuple(ref_center)
@@ -60,9 +71,9 @@ def run(cfg: Config | None = None, *, verbose: bool = True) -> PipelineResult:
     center = np.asarray(center, dtype=np.float64)
 
     scale_max = _provisional_scale_max(art.region, center, cfg)
-    chord_tol_svg = cfg.chord_error_mm / scale_max
+    chord_tol_svg = flatten_budget_mm / scale_max
     if chord_tol_svg < provisional_tol:
-        art = load_artwork(cfg.svg_path, chord_tol_svg, cfg.snap_grid_svg)
+        art = load_artwork(cfg.svg_path, chord_tol_svg, load_snap)
     chord_error_mm = chord_tol_svg * scale_max
 
     log(f"[svg]   labels={art.labels}  viewBox={art.viewbox}")

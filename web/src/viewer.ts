@@ -72,6 +72,37 @@ uniform vec3 uColor;
 out vec4 frag;
 void main() { frag = vec4(uColor, 1.0); }`;
 
+// Textured reference ball: smooth per-vertex normal (sphere centred at origin),
+// equirectangular UVs, flat albedo relit by the same simple diffuse+ambient as
+// the shell so the two read consistently.
+const TEX_VERT = `#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec2 aUV;
+uniform mat4 uProj, uView;
+out vec2 vUV;
+out vec3 vN;
+void main() {
+  vUV = aUV;
+  vN = normalize(aPos);
+  gl_Position = uProj * uView * vec4(aPos, 1.0);
+}`;
+
+const TEX_FRAG = `#version 300 es
+precision highp float;
+in vec2 vUV;
+in vec3 vN;
+uniform sampler2D uTex;
+out vec4 frag;
+void main() {
+  vec3 n = normalize(vN);
+  vec3 L = normalize(vec3(0.4, 0.5, 0.8));
+  float diff = max(dot(n, L), 0.0);
+  float amb = 0.55 + 0.12 * n.z;
+  vec3 c = texture(uTex, vUV).rgb * (amb + 0.55 * diff);
+  frag = vec4(c, 1.0);
+}`;
+
 function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
   const s = gl.createShader(type)!;
   gl.shaderSource(s, src);
@@ -100,6 +131,9 @@ export class Viewer {
   private gl: WebGL2RenderingContext;
   private prog: WebGLProgram;
   private lineProg: WebGLProgram;
+  private texProg: WebGLProgram;
+  private tex: WebGLTexture;
+  private texReady = false;
   private shell: GpuMesh | null = null;
   private ball: GpuMesh | null = null;
 
@@ -123,6 +157,8 @@ export class Viewer {
     this.gl = gl;
     this.prog = program(gl, VERT, FRAG);
     this.lineProg = program(gl, VERT, LINE_FRAG);
+    this.texProg = program(gl, TEX_VERT, TEX_FRAG);
+    this.tex = gl.createTexture()!;
     gl.enable(gl.DEPTH_TEST);
     gl.clearColor(0.09, 0.10, 0.12, 1);
     this.bindInput();
@@ -203,8 +239,38 @@ export class Viewer {
     this.shell = this.upload(positions, indices);
   }
 
-  setBall(positions: Float32Array, indices: Uint32Array) {
-    this.ball = this.upload(positions, indices);
+  setBall(positions: Float32Array, indices: Uint32Array, uvs?: Float32Array) {
+    this.ball = this.upload(positions, indices, uvs);
+  }
+
+  /** Load the equirectangular albedo for the textured ball (one-time GPU upload). */
+  setBallTexture(url: string) {
+    const gl = this.gl;
+    const img = new Image();
+    img.onload = () => {
+      gl.bindTexture(gl.TEXTURE_2D, this.tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, img);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);          // longitude wraps
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);   // clamp at poles
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      this.texReady = true;
+    };
+    // If the albedo can't be fetched/decoded (offline before precache, bad path,
+    // decode error), fall back to a flat grey pixel so the reference ball still
+    // renders (lit, untextured) instead of silently never appearing.
+    img.onerror = () => {
+      const gl = this.gl;
+      gl.bindTexture(gl.TEXTURE_2D, this.tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE,
+        new Uint8Array([160, 160, 165]));
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      this.texReady = true;
+      console.warn(`ball texture failed to load (${url}); using flat fallback`);
+    };
+    img.src = url;
   }
 
   /** Frame the camera distance to fit the current shell radius. */
@@ -213,7 +279,7 @@ export class Viewer {
     this.target = [0, 0, this.radiusHint * 0.35];
   }
 
-  private upload(positions: Float32Array, indices: Uint32Array): GpuMesh {
+  private upload(positions: Float32Array, indices: Uint32Array, uvs?: Float32Array): GpuMesh {
     const gl = this.gl;
     const vao = gl.createVertexArray()!;
     gl.bindVertexArray(vao);
@@ -222,6 +288,13 @@ export class Viewer {
     gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+    if (uvs) {
+      const uv = gl.createBuffer()!;
+      gl.bindBuffer(gl.ARRAY_BUFFER, uv);
+      gl.bufferData(gl.ARRAY_BUFFER, uvs, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(1);
+      gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+    }
     const tris = gl.createBuffer()!;
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, tris);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
@@ -277,8 +350,10 @@ export class Viewer {
       gl.uniform3f(gl.getUniformLocation(this.prog, "uEye"), eye[0], eye[1], eye[2]);
       gl.bindVertexArray(this.shell.vao);
       if (this.wireframe) {
-        gl.uniform3f(gl.getUniformLocation(this.lineProg, "uColor"), 0.8, 0.85, 0.9);
+        // uniforms apply to the *currently bound* program, so switch first —
+        // otherwise uColor is written against this.prog and lineProg stays black.
         gl.useProgram(this.lineProg);
+        gl.uniform3f(gl.getUniformLocation(this.lineProg, "uColor"), 0.8, 0.85, 0.9);
         gl.uniformMatrix4fv(gl.getUniformLocation(this.lineProg, "uProj"), false, proj);
         gl.uniformMatrix4fv(gl.getUniformLocation(this.lineProg, "uView"), false, view);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.shell.lines);
@@ -292,23 +367,18 @@ export class Viewer {
       gl.bindVertexArray(null);
     }
 
-    // translucent ball
-    if (this.ball && this.showBall) {
-      gl.useProgram(this.prog);
-      gl.uniformMatrix4fv(gl.getUniformLocation(this.prog, "uProj"), false, proj);
-      gl.uniformMatrix4fv(gl.getUniformLocation(this.prog, "uView"), false, view);
-      gl.uniform3f(gl.getUniformLocation(this.prog, "uEye"), eye[0], eye[1], eye[2]);
-      gl.uniform3f(gl.getUniformLocation(this.prog, "uColor"), 0.95, 0.55, 0.2);
-      gl.uniform1f(gl.getUniformLocation(this.prog, "uAlpha"), 0.28);
-      gl.enable(gl.BLEND);
-      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-      gl.depthMask(false);
+    // textured reference ball (opaque, lit, depth-tested behind the shell)
+    if (this.ball && this.showBall && this.texReady) {
+      gl.useProgram(this.texProg);
+      gl.uniformMatrix4fv(gl.getUniformLocation(this.texProg, "uProj"), false, proj);
+      gl.uniformMatrix4fv(gl.getUniformLocation(this.texProg, "uView"), false, view);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.tex);
+      gl.uniform1i(gl.getUniformLocation(this.texProg, "uTex"), 0);
       gl.bindVertexArray(this.ball.vao);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ball.tris);
       gl.drawElements(gl.TRIANGLES, this.ball.nTris, gl.UNSIGNED_INT, 0);
       gl.bindVertexArray(null);
-      gl.depthMask(true);
-      gl.disable(gl.BLEND);
     }
   }
 }

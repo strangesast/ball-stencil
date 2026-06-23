@@ -21,6 +21,11 @@ export interface Params {
   chord_error_mm: number;
   min_segment_mm: number;
   target_edge_mm: number;
+  /** "constrained" (poly2tri CDT, smooth cut edge) | "centroid" (legacy, faceted). */
+  mesh_strategy: "constrained" | "centroid";
+  /** How closely the cut edge follows the design curve (mm on the sphere),
+   *  decoupled from target_edge_mm. Only the "constrained" mesher honours it. */
+  boundary_smoothness_mm: number;
 
   radius_tolerance_mm: number;
   min_island_area_mm2: number;
@@ -44,6 +49,8 @@ export const DEFAULT_PARAMS: Params = {
   chord_error_mm: 0.1,
   min_segment_mm: 0.05,
   target_edge_mm: 1.2,
+  mesh_strategy: "constrained",
+  boundary_smoothness_mm: 0.04,
 
   radius_tolerance_mm: 0.01,
   min_island_area_mm2: 1.0,
@@ -79,4 +86,12 @@ export function validateParams(p: Params): void {
     throw new Error(`target_edge_mm must be > 0, got ${p.target_edge_mm}`);
   if (!(p.chord_error_mm > 0))
     throw new Error(`chord_error_mm must be > 0, got ${p.chord_error_mm}`);
+  if (p.mesh_strategy !== "constrained" && p.mesh_strategy !== "centroid")
+    throw new Error(`mesh_strategy must be 'constrained' or 'centroid', got ${p.mesh_strategy}`);
+  if (!(p.boundary_smoothness_mm > 0))
+    throw new Error(`boundary_smoothness_mm must be > 0, got ${p.boundary_smoothness_mm}`);
+  // The constrained mesher relies on the cut dilation for a manifold cut edge and
+  // does not grid-snap the contour, so cut_separation_svg must be > 0 for it.
+  if (p.mesh_strategy === "constrained" && !(p.cut_separation_svg > 0))
+    throw new Error(`cut_separation_svg must be > 0 for the 'constrained' mesher, got ${p.cut_separation_svg}`);
 }

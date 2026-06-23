@@ -1,5 +1,9 @@
-*.svg
-*.png
+# Design inputs / scratch renders live at the repo root and under tools/.
+# Do NOT blanket-ignore svg/png everywhere — a global glob silently swallowed
+# the PWA icons under web/public/. Anchor the ignore to where throwaways live.
+/*.svg
+/*.png
+/tools/*.png
 
 # Python
 __pycache__/
@@ -8,3 +12,5 @@ __pycache__/
 
 # Generated meshes / renders (regenerable via `python -m ball_stencil`)
 out/
+
+node_modules/
