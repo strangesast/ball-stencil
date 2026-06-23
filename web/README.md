@@ -76,9 +76,18 @@ The last loaded SVG (text + name), all parameter values, and panel/group
 open state are saved to `localStorage` and restored — and the stencil rebuilt —
 on launch. This is local only; nothing persisted triggers a network call.
 Reads are defensive (corrupt / oversized values fall back to defaults + the
-first-run reference-ball state) and writes survive `QuotaExceededError` (the
-small metadata persists even if the ~140 kB SVG blob can't). `reset defaults`
-forgets persisted parameter customizations.
+first-run sample letter) and writes survive `QuotaExceededError` (the small
+metadata persists even if the ~140 kB SVG blob can't). When no SVG is restored,
+the bundled sample letter fills the void without being persisted (see *Artwork*
+above). `reset defaults` forgets persisted parameter customizations only — it
+does not touch the artwork.
+
+The app ships a **70° cap** by default (`UI_DEFAULT_PARAMS`) — a full hemisphere
+(90°) wraps past the ball's equator and is fiddly to slip on — which is what a
+new user sees and what `reset defaults` returns to. The pipeline's
+`DEFAULT_PARAMS` stays a faithful 90° mirror of `ball_stencil/config.py`, so the
+golden parity tests keep validating the geometry against the Python oracle at the
+oracle's parameters; only the app-facing initial value differs.
 
 ## PWA / offline / updates
 
@@ -200,6 +209,7 @@ Runtime dependencies are deliberately minimal, mature, and near-zero-dep:
 | `js-angusj-clipper` (1.3.1) | cut-hole dilation (polygon offset only) | clipper2-js's offset produces spiral "curl" artifacts when dilating the overlapping artwork blobs (a smooth region becomes a sawtooth cut edge); the original, battle-tested Clipper (Angus Johnson v1) offsets it cleanly, matching Shapely. Inlined WASM (asm.js fallback), so it bundles + precaches like any JS and works offline. Loaded once in the worker; offsets are synchronous after. |
 | `delaunator` (5.1.0) | unconstrained Delaunay | Tiny, zero-dependency, stable. Used by the legacy `centroid` mesher. |
 | `poly2tri` (1.5.0) | constrained Delaunay triangulation | Powers the default `constrained` mesher: the design contour is a constraint edge so the cut edge follows the artwork smoothly. The same algorithm runs in the Python reference (`pypoly2tri`), keeping the two ports in lockstep. Pure JS, no transitive deps. |
+| `opentype.js` (1.3.4) | letter → filled glyph outline | Parses the bundled subset font and emits a glyph's exact filled outline (counters as separate contours) as SVG `d` data, so the letter generator produces true filled shapes offline. Lazy-loaded on the main thread only when a letter is first generated. Zero transitive deps. |
 
 Everything else is the **platform**: SVG parsing via a small DOM-free parser,
 path flattening by the adaptive recursive-subdivision algorithm, the 3D preview
@@ -217,7 +227,9 @@ Approximate production output (`npm run build`, raw / gzip):
 |---|---|---|
 | main UI (`index`) | ~27 kB (~10 kB gz) | loaded up front (UI + WebGL viewer + overlays/persistence/PWA glue) |
 | `workbox-window` (PWA register) | ~6 kB (~2.4 kB gz) | tiny SW registration client |
-| pipeline (worker, lazy) | ~97 kB (~30 kB gz) | Clipper2 + Delaunator + geometry |
+| pipeline (worker, lazy) | ~120 kB | Clipper2 + Delaunator + geometry |
+| `opentype.js` (lazy) | ~174 kB (~50 kB gz) | letter outlines — loaded only on first letter generation, never on a pure-upload session |
+| DejaVu Sans Bold subset (`.woff`) | ~6 kB | bundled font for the letter generator, precached |
 | worker / css / small chunks | ~10 kB | |
 
 Initial main-thread JS is ~27 kB (was ~17 kB before the immersive-UI + PWA

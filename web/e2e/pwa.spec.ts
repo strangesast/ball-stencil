@@ -76,6 +76,18 @@ test("works fully offline: boots from cache, builds and exports with no network"
   await page.reload(); // navigation served by the SW from cache
   expect(await page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
 
+  // Cold offline launch still builds the default sample letter: the opentype
+  // chunk and the bundled font are precached, so no network is needed.
+  await expect(page.locator("#badge")).toHaveText("PASS", { timeout: 40000 });
+  await openPanel(page, "artwork");
+  await expect(page.locator("#svginfo")).toContainText("sample");
+
+  // And a fresh letter can be generated offline too.
+  await page.fill("#letter", "S");
+  await page.click("#letter-go");
+  await expect(page.locator("#svginfo")).not.toContainText("sample", { timeout: 40000 });
+  await expect(page.locator("#badge")).toHaveText("PASS");
+
   // Loading an SVG is a local file read; the build uses the precached lazy
   // worker/pipeline chunk — all with the network disabled.
   await loadSvg(page, "splash.svg");

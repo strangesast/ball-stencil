@@ -55,6 +55,19 @@ test("builds splash.svg to a PASS stencil with the golden topology", async ({ pa
   await loadSvg(page, "splash.svg");
   await expect(page.locator("#badge")).toHaveText("PASS", { timeout: 40000 });
 
+  // The app default cap is 70°; the golden oracle is captured at 90°. Pin the cap
+  // to 90° and wait for the rebuild so signed volume validates against the golden
+  // (topology — holes/components — is cap-independent, identical at 70° and 90°).
+  await setParam(page, "cap_angle_deg", "90");
+  await expect
+    .poll(async () => {
+      const b = await readReport(page);
+      const mm = b.match(/signed volume\s+([\d.]+)/);
+      return mm ? parseFloat(mm[1]) : 0;
+    }, { timeout: 40000 })
+    .toBeGreaterThan(splashDefault.signed_volume_mm3 * 0.99);
+  await expect(page.locator("#badge")).toHaveText("PASS");
+
   const body = await readReport(page);
   // exact topology: 51 cut holes, 2 components incl. a free island
   expect(body).toContain("cut holes: 51");

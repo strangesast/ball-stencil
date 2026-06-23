@@ -5,7 +5,7 @@
  * compute here (that all lives in the worker) beyond the cheap reference-ball
  * UV sphere for the translucent preview.
  */
-import { DEFAULT_PARAMS, Params, validateParams, ballRadius } from "./pipeline/config";
+import { UI_DEFAULT_PARAMS, Params, validateParams, ballRadius } from "./pipeline/config";
 import { uvSphereTextured } from "./pipeline/exportmesh";
 import { Viewer } from "./viewer";
 import { Sheets } from "./ui/sheet";
@@ -51,7 +51,7 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 
 // -- restorable state -------------------------------------------------------
 const restored = loadState();
-let params: Params = restored ? { ...restored.params } : { ...DEFAULT_PARAMS };
+let params: Params = restored ? { ...restored.params } : { ...UI_DEFAULT_PARAMS };
 let svgText: string | null = restored?.svgText ?? null;
 let svgName = restored?.svgName ?? "stencil";
 let expandedGroups = new Set<string>(restored?.expandedGroups ?? []);
@@ -434,7 +434,7 @@ function init() {
   });
 
   $("reset").addEventListener("click", () => {
-    params = { ...DEFAULT_PARAMS };
+    params = { ...UI_DEFAULT_PARAMS };
     buildPanel();
     persist(); // overwrite persisted params with defaults (forget customizations)
     refreshBall();

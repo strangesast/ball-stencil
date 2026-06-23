@@ -58,6 +58,16 @@ export const DEFAULT_PARAMS: Params = {
   cut_separation_svg: 0.3,
 };
 
+/**
+ * App-facing defaults. Identical to DEFAULT_PARAMS except for a shallower 70°
+ * cap — a hemisphere (90°) wraps past the ball's equator and is awkward to slip
+ * on, so the UI ships a 70° cap a new user sees and `reset defaults` returns to.
+ * DEFAULT_PARAMS itself stays a faithful mirror of ball_stencil/config.py (90°)
+ * so the golden parity tests keep validating the pipeline against the Python
+ * oracle at the oracle's parameters.
+ */
+export const UI_DEFAULT_PARAMS: Params = { ...DEFAULT_PARAMS, cap_angle_deg: 70.0 };
+
 export const ballRadius = (p: Params) => p.sphere_diameter_mm / 2.0;
 export const innerRadius = (p: Params) => ballRadius(p) + p.fit_clearance_mm;
 export const outerRadius = (p: Params) => innerRadius(p) + p.wall_thickness_mm;
