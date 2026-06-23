@@ -48,6 +48,9 @@ jobs:
         run: npm run build
         env:
           VITE_BASE_PATH: "/${{ github.event.repository.name }}/"
+          # Cloudflare Web Analytics beacon token (public — page-source visible).
+          # Set repo variable CF_BEACON_TOKEN to enable; unset → no beacon.
+          VITE_CF_BEACON_TOKEN: ${{ vars.CF_BEACON_TOKEN }}
 
       # Pages Actions deploy serves the artifact as-is (no Jekyll), but a
       # .nojekyll is cheap insurance against any underscore-prefixed paths.

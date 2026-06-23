@@ -26,6 +26,30 @@ export default defineConfig({
     esbuildOptions: { define: { global: "globalThis" } },
   },
   plugins: [
+    // Cloudflare Web Analytics: a single external beacon, injected only when a
+    // token is present. So local dev / `vite preview` / the Playwright e2e run
+    // (no token set) stay beacon-free — no test traffic counted, no extra
+    // network call in CI. The deploy workflow supplies VITE_CF_BEACON_TOKEN for
+    // the production Pages build. The token is public by design (it ships in the
+    // page source), so it lives in a repo variable, not a secret.
+    {
+      name: "inject-cf-beacon",
+      transformIndexHtml() {
+        const token = process.env.VITE_CF_BEACON_TOKEN;
+        if (!token) return;
+        return [
+          {
+            tag: "script",
+            attrs: {
+              defer: true,
+              src: "https://static.cloudflareinsights.com/beacon.min.js",
+              "data-cf-beacon": JSON.stringify({ token }),
+            },
+            injectTo: "body",
+          },
+        ];
+      },
+    },
     VitePWA({
       // We author src/sw.ts ourselves; the plugin only injects the precache
       // list (the real, hashed dist/ output — incl. the lazy worker/pipeline
