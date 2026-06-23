@@ -1,9 +1,10 @@
 /**
  * Glyph → SVG conversion. Verifies the synthesized SVG is pipeline-clean: it
- * parses via parseSvg into a viewBox + at least one path, a counter letter
- * yields the expected number of contours (so even-odd carves the counter), and
- * a generated letter runs all the way through the real geometry pipeline to a
- * watertight/manifold PASS. Whitespace/invalid input is rejected, not built.
+ * parses via parseSvg into a viewBox + at least one path, a stencil glyph yields
+ * bridge-split solid contours (not a nested counter), and a generated letter —
+ * including a counter letter — runs all the way through the real geometry
+ * pipeline to a watertight/manifold PASS with no free island (the stencil face
+ * bridges every bowl). Whitespace/invalid input is rejected, not built.
  */
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync } from "node:fs";
@@ -18,7 +19,7 @@ import { DEFAULT_PARAMS } from "../src/pipeline/config";
 import { loadOffsetLib } from "../src/pipeline/offset";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const FONT = join(here, "..", "public", "fonts", "DejaVuSans-Bold-subset.woff");
+const FONT = join(here, "..", "public", "fonts", "StardosStencil-Bold-subset.woff");
 
 let font: Font;
 beforeAll(async () => {
@@ -36,7 +37,7 @@ function contourCount(svgText: string): number {
 }
 
 describe("buildGlyphSvg → parseSvg", () => {
-  it("a solid letter parses into a viewBox + exactly one contour", () => {
+  it("a letter parses into a finite viewBox + at least one contour", () => {
     const { svgText, name } = buildGlyphSvg(font, "Z");
     expect(name).toBe("Z");
     const parsed = parseSvg(svgText);
@@ -45,14 +46,16 @@ describe("buildGlyphSvg → parseSvg", () => {
     expect(parsed.viewBox[2]).toBeGreaterThan(0);
     expect(parsed.viewBox[3]).toBeGreaterThan(0);
     expect(parsed.paths.length).toBeGreaterThanOrEqual(1);
-    expect(contourCount(svgText)).toBe(1); // Z has no counter
+    expect(contourCount(svgText)).toBeGreaterThanOrEqual(1);
   });
 
-  it("a counter letter yields an outer contour + its hole(s)", () => {
-    // B = outer ring + two counters; O = outer ring + one counter.
-    expect(contourCount(buildGlyphSvg(font, "B").svgText)).toBe(3);
-    expect(contourCount(buildGlyphSvg(font, "O").svgText)).toBe(2);
-    expect(contourCount(buildGlyphSvg(font, "A").svgText)).toBe(2);
+  it("a stencil glyph emits bridge-split solid pieces (no nested counter)", () => {
+    // The stencil face breaks each glyph into disjoint solid contours joined to
+    // the outside by bridge gaps — NOT an outer ring + enclosed counter. So even
+    // a counter letter is several side-by-side pieces, never a hole-in-a-ring.
+    expect(contourCount(buildGlyphSvg(font, "O").svgText)).toBe(2); // two arcs
+    expect(contourCount(buildGlyphSvg(font, "B").svgText)).toBe(2);
+    expect(contourCount(buildGlyphSvg(font, "A").svgText)).toBe(3);
   });
 
   it("centres the glyph: viewBox centre is the design centre parseSvg derives", () => {
@@ -95,25 +98,31 @@ describe("buildGlyphSvg → parseSvg", () => {
 });
 
 describe("generated letter through the real pipeline", () => {
-  it("a solid letter builds to a watertight/manifold PASS, single hole", () => {
+  it("a letter builds to a watertight/manifold PASS with no free island", () => {
     const parsed = parseSvg(buildGlyphSvg(font, "Z").svgText);
     const res = runPipeline(parsed, { ...DEFAULT_PARAMS }, "Z.svg");
     expect(res.ok).toBe(true);
     expect(res.report.isWatertight).toBe(true);
     expect(res.report.isManifold).toBe(true);
     expect(res.report.consistentWinding).toBe(true);
-    expect(res.build.nCutRegions).toBe(1);
-    expect(res.build.islands.length).toBe(1); // no free island
+    // Stardos splits the Z into bridge-separated cut regions, but the sheet
+    // stays one connected component — no free-floating material island.
+    expect(res.build.nCutRegions).toBeGreaterThanOrEqual(1);
+    expect(res.build.islands.length).toBe(1);
   });
 
-  it("a counter letter carves the counter (hole present), still a PASS", () => {
-    const parsed = parseSvg(buildGlyphSvg(font, "O").svgText);
-    const res = runPipeline(parsed, { ...DEFAULT_PARAMS }, "O.svg");
-    expect(res.ok).toBe(true);
-    expect(res.report.isWatertight).toBe(true);
-    // The carved counter is an enclosed material island (it would be a physical
-    // bridge-less hole) — that is the legitimate even-odd result, not solid fill.
-    expect(res.build.islands.length).toBeGreaterThan(1);
+  it("a counter letter stays a single component — the stencil bridges the bowl", () => {
+    // This is the whole reason for a stencil face: O/A/B used to carve an
+    // enclosed counter that becomes a free-floating island (the "would fall
+    // apart" warning). Bridged, the bowl connects to the outside, so the sheet
+    // is one piece and there is no free island.
+    for (const ch of ["O", "A", "B"]) {
+      const parsed = parseSvg(buildGlyphSvg(font, ch).svgText);
+      const res = runPipeline(parsed, { ...DEFAULT_PARAMS }, `${ch}.svg`);
+      expect(res.ok, ch).toBe(true);
+      expect(res.report.isWatertight, ch).toBe(true);
+      expect(res.build.islands.length, ch).toBe(1); // no free island
+    }
   });
 
   it("the first-run default letter builds to a clean single-component PASS", () => {
@@ -121,7 +130,7 @@ describe("generated letter through the real pipeline", () => {
     const res = runPipeline(parsed, { ...DEFAULT_PARAMS }, "default.svg");
     expect(res.ok).toBe(true);
     expect(res.report.isWatertight).toBe(true);
-    // Counter-free default → no scary free-island warning on first paint.
+    // No scary free-island warning on first paint.
     expect(res.build.islands.length).toBe(1);
   });
 });

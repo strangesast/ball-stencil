@@ -20,22 +20,26 @@ routes SVG → `loadSvgText` and raster → the trace worker by type:
   Artwork panel and the app synthesizes a clean `<svg viewBox><path d/></svg>`
   from a bundled font and feeds it straight into the pipeline. Builds live
   (debounced) as you type, or on **Generate** / Enter. The letter becomes the
-  download name (`B_stencil.stl`). Counter letters (B, O, A, …) are emitted as
-  separate contours so svgio's even-odd fold carves the counter out as a hole —
-  which, being an enclosed material island, legitimately raises the free-island
-  warning (a real letter-stencil needs bridges). Whitespace / unfillable input
-  is rejected inline; it never builds blank.
+  download name (`B_stencil.stl`). The bundled face is a **stencil** font, so
+  counter letters (B, O, A, …) come pre-bridged: their bowls join the outside
+  through bridge gaps and are emitted as side-by-side solid pieces rather than a
+  ring + enclosed counter, so the stencil sheet stays one connected component
+  and no letter raises the free-island warning. Whitespace / unfillable input is
+  rejected inline; it never builds blank.
 - **Glyph → SVG** lives in `src/glyph.ts`. `glyphToSvg()` lazy-loads
   [opentype.js] + the precached font and delegates to the pure, DOM-free
   `buildGlyphSvg(font, text)` (unit-tested against `parseSvg`/`loadArtwork`).
   `getPath().toPathData()` gives absolute, transform-free, y-down-upright
   outlines — the same convention the bundled Inkscape samples use, so the
   pipeline's default `flip_v` un-mirrors a generated letter with no toggle.
-- **Bundled font.** A single heavy face, **DejaVu Sans Bold** subset to
-  printable ASCII (`public/fonts/DejaVuSans-Bold-subset.woff`, **6 KB**;
-  license alongside). Heavy/high-contrast on purpose — thin or serif strokes
-  trace poorly and produce slivers / free islands downstream. opentype.js itself
-  is a lazy ~50 KB-gzip chunk, loaded only when a letter is first generated.
+- **Bundled font.** A single heavy *stencil* face, **Stardos Stencil Bold**
+  subset to printable ASCII (`public/fonts/StardosStencil-Bold-subset.woff`,
+  **~10 KB**; OFL license alongside). A stencil face on purpose — every counter
+  is bridged to the outside, so generated letters never carve an enclosed island
+  that would fall out of a real cut (the free-island warning); it is also heavy/
+  high-contrast, since thin or serif strokes trace poorly and produce slivers
+  downstream. opentype.js itself is a lazy ~50 KB-gzip chunk, loaded only when a
+  letter is first generated.
 - **Trace a raster (PNG/JPG/WebP/BMP/GIF).** Pick or drop an image and it is
   traced to a filled monochrome **silhouette** SVG, then fed through the identical
   pipeline. The Artwork panel has a backend toggle — **Potrace** (clean,
@@ -52,7 +56,7 @@ routes SVG → `loadSvgText` and raster → the trace worker by type:
 
 **First-run default.** A brand-new visitor (no restored SVG) immediately sees a
 finished sample stencil — the letter **Z**, built through the same generator
-(a solid, counter-free glyph, so first paint is a clean single-hole PASS with no
+(a crisp bold glyph; with the stencil face first paint is a clean PASS with no
 free-island warning). The sample is a placeholder, not user data: it is
 re-derived on each empty launch, **never persisted** (so it can't resurrect over
 something the user intentionally cleared), labelled *“Showing a sample …”*, and
@@ -307,7 +311,7 @@ Approximate production output (`npm run build`, raw / gzip):
 | `workbox-window` (PWA register) | ~6 kB (~2.4 kB gz) | tiny SW registration client |
 | pipeline (worker, lazy) | ~120 kB | Clipper2 + Delaunator + geometry |
 | `opentype.js` (lazy) | ~174 kB (~50 kB gz) | letter outlines — loaded only on first letter generation, never on a pure-upload session |
-| DejaVu Sans Bold subset (`.woff`) | ~6 kB | bundled font for the letter generator, precached |
+| Stardos Stencil Bold subset (`.woff`) | ~10 kB | bundled stencil font for the letter generator, precached |
 | worker / css / small chunks | ~10 kB | |
 
 Initial main-thread JS is ~27 kB (was ~17 kB before the immersive-UI + PWA

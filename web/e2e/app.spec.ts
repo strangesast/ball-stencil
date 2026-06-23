@@ -208,7 +208,7 @@ test("splash_z builds a single-hole, single-component stencil (no island)", asyn
 
 test("generates a stencil from a typed counter letter, downloadable by its name", async ({ page }) => {
   await page.goto("/");
-  // The bundled sample (a solid letter) builds first; it has no free island.
+  // The bundled sample (a bridged stencil letter) builds first; no free island.
   await page.locator('[data-panel="report"]').click();
   await expect(page.locator("#report-body")).not.toContainText("free island", { timeout: 40000 });
 
@@ -216,11 +216,13 @@ test("generates a stencil from a typed counter letter, downloadable by its name"
   await page.fill("#letter", "B");
   await page.click("#letter-go");
 
-  // B's ink is one through-hole; its two counters are carved out as free islands
-  // (the legitimate even-odd result) — proves counters are not filled solid.
+  // The stencil face bridges B's bowls to the outside, so they are cut as two
+  // separate regions yet the sheet stays one connected component — no free
+  // island (the whole reason for a stencil font).
   await openPanel(page, "report");
-  await expect(page.locator("#report-body")).toContainText("cut holes: 1", { timeout: 40000 });
-  await expect(page.locator("#report-body")).toContainText("free island");
+  await expect(page.locator("#report-body")).toContainText("cut holes: 2", { timeout: 40000 });
+  await expect(page.locator("#report-body")).toContainText("material components: 1");
+  await expect(page.locator("#report-body")).not.toContainText("free island");
   await expect(page.locator("#badge")).toHaveText("PASS");
 
   // Downloads read "<letter>_stencil.stl" (no "sample" tag — it is now user data).
@@ -312,6 +314,34 @@ test("a typed letter's colour flows through to the projection paint source", asy
   // the build reports the design colour it parsed back from the generated SVG
   const svgColor = await page.evaluate(() => (window as any).__svgColor);
   expect(svgColor).toBe("#1133cc");
+});
+
+test("changing the letter-colour swatch recolours the current letter (live, then committed)", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("#badge")).toHaveText("PASS", { timeout: 40000 });
+  await openPanel(page, "artwork");
+  const builds = () => page.evaluate(() => (window as any).__resultCount ?? 0);
+
+  // generate a letter so there is a live letter to recolour
+  await page.fill("#letter", "S");
+  await page.click("#letter-go");
+  await expect(page.locator("#badge")).toHaveText("PASS", { timeout: 40000 });
+  const n0 = await builds();
+
+  // dragging the swatch (input) recolours live — no rebuild
+  await page.locator("#letter-color").evaluate((el: HTMLInputElement) => { el.value = "#22aa44"; el.dispatchEvent(new Event("input", { bubbles: true })); });
+  await page.waitForTimeout(200);
+  expect(await builds()).toBe(n0);
+
+  // committing the pick (change) re-embeds the colour into the letter's SVG
+  await page.locator("#letter-color").evaluate((el: HTMLInputElement) => { el.dispatchEvent(new Event("change", { bubbles: true })); });
+  await expect(page.locator("#badge")).toHaveText("PASS", { timeout: 40000 });
+  await expect.poll(() => page.evaluate(() => (window as any).__svgColor)).toBe("#22aa44");
+
+  // the recoloured letter survives a reload (the colour is persisted in the SVG)
+  await page.reload();
+  await expect(page.locator("#badge")).toHaveText("PASS", { timeout: 40000 });
+  expect(await page.evaluate(() => (window as any).__svgColor)).toBe("#22aa44");
 });
 
 test("render mode + projection target persist across reload", async ({ page }) => {

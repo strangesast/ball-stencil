@@ -9,7 +9,7 @@
 
 import type { Paths64 } from "clipper2-js";
 import { Clip } from "./clip";
-import { ParsedSvg } from "./svg";
+import { applyMatrix, isIdentity, Matrix, ParsedSvg } from "./svg";
 import { parsePathSubpaths, flattenSubpath, dedupePolyline, Pt } from "./tessellate";
 
 export interface Artwork {
@@ -30,8 +30,17 @@ function ringArea(pts: Pt[]): number {
   return a / 2.0;
 }
 
-function subpathToRing(sub: ReturnType<typeof parsePathSubpaths>[number], tol: number): number[][] | null {
+function subpathToRing(
+  sub: ReturnType<typeof parsePathSubpaths>[number],
+  tol: number,
+  transform: Matrix,
+): number[][] | null {
   let pts = dedupePolyline(flattenSubpath(sub, tol));
+  // Map the path's local coordinates into viewBox space (ancestor <g transform>
+  // and the path's own transform) before clipping/centring.
+  if (!isIdentity(transform)) {
+    pts = pts.map((p) => applyMatrix(transform, p[0], p[1]) as Pt);
+  }
   if (pts.length < 3) return null;
   // close the ring
   if (Math.abs(pts[0][0] - pts[pts.length - 1][0]) > 1e-9 || Math.abs(pts[0][1] - pts[pts.length - 1][1]) > 1e-9) {
@@ -53,7 +62,7 @@ export function loadArtwork(
     if (path.hidden) continue;
     labels.push(path.label);
     for (const sub of parsePathSubpaths(path.d)) {
-      const ring = subpathToRing(sub, chordTolSvg);
+      const ring = subpathToRing(sub, chordTolSvg, path.transform);
       if (ring) rings.push(ring);
     }
   }

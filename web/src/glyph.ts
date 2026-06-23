@@ -4,10 +4,15 @@
  * exactly like an uploaded file — no `<g>`, no transforms, no `<text>`, just an
  * absolute-coordinate filled outline (parseSvg only reads `<path d>`).
  *
- * The outline comes from a bundled, subset, heavy face (DejaVu Sans Bold) parsed
- * with opentype.js. `getPath()` emits each contour — including a letter's
- * counters (B/O/A/…) — as a separate subpath, which is exactly what svgio's
- * even-odd fold needs to carve the counter out as a hole rather than fill it.
+ * The outline comes from a bundled, subset, heavy *stencil* face (Stardos
+ * Stencil Bold) parsed with opentype.js. A stencil face is the whole point: its
+ * counters (the bowls of B/O/A/…) are joined to the outside by bridge gaps, so
+ * `getPath()` emits each glyph as side-by-side solid contours rather than a
+ * nested outer-ring + enclosed counter. Even-odd folds those into disjoint
+ * filled pieces, and — crucially — the stencil *sheet* stays one connected
+ * component, so no counter becomes a free-floating material island that would
+ * fall out of a real cut. Any letter is now a clean PASS, not just counter-free
+ * ones (see the free-island warning the pipeline raises for bridge-less holes).
  *
  * opentype.js produces y-down SVG coordinates (glyph upright when dropped into an
  * SVG), the same convention as the bundled Inkscape samples, so the pipeline's
@@ -27,18 +32,18 @@ export interface BundledFont {
   file: string;
 }
 
-/** One clean, heavy, high-contrast face. Thin/serif faces trace poorly and
- *  produce slivers/free-islands downstream, so we ship a single bold sans. */
+/** One clean, heavy stencil face. A stencil face bridges every counter to the
+ *  outside, so generated letters never carve an enclosed material island (the
+ *  thing the free-island warning flags); thin/serif faces also trace poorly and
+ *  produce slivers downstream, so we ship a single bold stencil sans. */
 export const FONTS: BundledFont[] = [
-  { id: "dejavu-bold", label: "DejaVu Sans Bold", file: "fonts/DejaVuSans-Bold-subset.woff" },
+  { id: "stardos-stencil-bold", label: "Stardos Stencil Bold", file: "fonts/StardosStencil-Bold-subset.woff" },
 ];
 
-/** The zero-input default letter shown on a fresh, empty first run. A solid,
- *  counter-free glyph so the very first paint is a clean single-hole PASS — a
- *  counter letter (B/O/A) legitimately produces an enclosed material island,
- *  which would surface an alarming "stencil would fall apart" warning as an
- *  unsolicited default. The even-odd counter path is exercised by the tests and
- *  the moment the user types their own letter. */
+/** The zero-input default letter shown on a fresh, empty first run. With a
+ *  stencil face every glyph is a clean PASS (counters are bridged, so none
+ *  becomes a free island), so the default no longer has to be counter-free — we
+ *  keep a single bold "Z" as a crisp, unambiguous sample. */
 export const DEFAULT_LETTER = "Z";
 
 export interface GlyphSvg {

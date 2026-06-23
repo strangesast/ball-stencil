@@ -22,8 +22,9 @@
  *     chunk (no separate .wasm asset in v0.4.4 — confirmed from the package), so
  *     `init()` takes no arguments and offline works via the precached JS chunk.
  *     Its SVG wraps paths in a `<g transform="translate(0,H) scale(0.1,-0.1)">`
- *     (10× + Y-flip); we bake that affine into absolute pixel coordinates because
- *     parseSvg ignores `<g>`/transforms.
+ *     (10× + Y-flip); we bake that affine into absolute pixel coordinates so the
+ *     emitted document is flat (parseSvg now also honours `<g>`/transforms, but
+ *     baking keeps the trace output self-contained and tolerance in pixel units).
  *   "color": ImageTracer.js — tolerant of photos; pixel-space output, no transform.
  *
  * `detail` despeckles (potrace turdsize / imagetracer pathomit); higher drops more

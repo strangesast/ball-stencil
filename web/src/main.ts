@@ -67,6 +67,11 @@ let spinAxis: SpinAxis = restored?.spinAxis ?? "z";
 let paintOverride: string | null = restored?.paintOverride ?? null;
 let letterColor: string = restored?.letterColor ?? DEFAULT_PAINT_HEX;
 let lastSvgColor: string | null = null;
+// The character(s) of the currently-shown generated letter (null when the
+// active artwork is an uploaded SVG or a traced raster). Lets the letter-colour
+// swatch re-embed a new colour into the live letter, mirroring how the trace
+// threshold re-traces the current raster.
+let lastLetter: string | null = null;
 // Raster-trace options (apply only when the picked file is an image). Restored
 // from the persisted meta; written back on change.
 let traceBackend: TraceBackend = restored?.traceBackend ?? "potrace";
@@ -425,6 +430,7 @@ function loadSvgText(text: string, name: string, opts: { isDefault?: boolean } =
 
 function loadFile(file: File) {
   lastRasterFile = null; // SVG artwork takes over; don't re-trace a prior raster
+  lastLetter = null; // an uploaded SVG is not a generated letter
   const name = file.name.replace(/\.svg$/i, "") || "stencil";
   const reader = new FileReader();
   reader.onload = () => loadSvgText(String(reader.result), name);
@@ -485,6 +491,7 @@ let lastRasterFile: File | null = null;
  *  loadSvgText() convergence point the picker, drag/drop and letter generator use. */
 function traceFile(file: File) {
   lastRasterFile = file;
+  lastLetter = null; // a traced raster is not a generated letter
   pendingTraceName = file.name.replace(RASTER_RE, "") || "image";
   const worker = ensureTraceWorker();
   traceJob += 1;
@@ -529,8 +536,28 @@ async function generateLetter(raw: string) {
     const { svgText: text, name } = await glyphToSvg(raw, { fill: letterColor });
     setLetterError(null);
     loadSvgText(text, name);
+    lastLetter = raw; // remember it so the colour swatch can recolour it live
   } catch (err) {
     setLetterError(err instanceof Error ? err.message : String(err));
+  }
+}
+
+/** Re-embed `letterColor` into the currently-shown generated letter so the
+ *  colour swatch recolours it live — the same visible effect as the view tab's
+ *  paint picker (colour never changes geometry, so this is just a recolour +
+ *  repaint). Preserves the sample/real status so recolouring the first-run
+ *  sample doesn't silently promote it to persisted user artwork. No-op when the
+ *  active artwork isn't a letter (an uploaded SVG / traced raster keeps its own
+ *  colour). */
+async function recolorCurrentLetter() {
+  if (lastLetter === null) return;
+  const wasDefault = isDefaultArtwork;
+  try {
+    const { glyphToSvg } = await import("./glyph");
+    const { svgText: text, name } = await glyphToSvg(lastLetter, { fill: letterColor });
+    loadSvgText(text, name, { isDefault: wasDefault });
+  } catch {
+    /* leave the current artwork untouched on a transient load failure */
   }
 }
 
@@ -680,10 +707,25 @@ function init() {
     persist();
   });
 
-  // letter generator colour swatch
+  // letter generator colour swatch. While a generated letter is shown it
+  // recolours it live, exactly like the view tab's paint picker: `input` fires
+  // continuously as you drag, so we only repaint (cheap, no rebuild — colour
+  // never changes geometry); `change` fires once on commit, when we re-embed the
+  // colour into the letter's SVG so it survives reload and downloads carry it.
+  // When the artwork isn't a letter the swatch only sets the next letter's
+  // colour (an uploaded SVG / traced raster keeps its own).
   const letterColorInput = $("letter-color") as HTMLInputElement;
   letterColorInput.value = letterColor;
-  letterColorInput.addEventListener("input", () => { letterColor = letterColorInput.value; persist(); });
+  letterColorInput.addEventListener("input", () => {
+    letterColor = letterColorInput.value;
+    persist();
+    if (lastLetter !== null) {
+      lastSvgColor = letterColor; // the live letter's design colour
+      applyPaint(); // repaint the projection now, mirroring onResult
+      if (!paintOverride) paintColor.value = resolvedPaint();
+    }
+  });
+  letterColorInput.addEventListener("change", () => { void recolorCurrentLetter(); });
 
   // persist which panel is open
   sheets.onChange(() => persist());
@@ -710,6 +752,7 @@ function init() {
         const { svgText: text, name } = await glyphToSvg(DEFAULT_LETTER, { fill: letterColor });
         if (userArtworkLoaded) return; // user supplied artwork while we loaded
         loadSvgText(text, name, { isDefault: true });
+        lastLetter = DEFAULT_LETTER; // the sample is a letter too — recolourable
       } catch (err) {
         if (userArtworkLoaded) return;
         setOverlay(err instanceof Error ? err.message : "Load an SVG to build a stencil.", true);

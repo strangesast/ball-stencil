@@ -409,13 +409,16 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
   .sheet {
     left: 0;
     right: 0;
-    bottom: 0;
+    /* lift the sheet to sit flush atop the on-screen keyboard (--kb) so the
+       focused input stays visible; collapses to 0 when the keyboard hides */
+    bottom: var(--kb);
     width: 100%;
-    max-height: calc(var(--vvh) - 12px - var(--kb));
+    max-height: calc(var(--vvh) - 12px);
     border-radius: 18px 18px 0 0;
     padding-bottom: calc(env(safe-area-inset-bottom));
     transform: none;
     animation: slideup .2s ease;
+    transition: bottom .2s ease;
   }
   @keyframes slideup { from { transform: translateY(100%); } to { transform: translateY(0); } }
   .grip { display: block; width: 38px; height: 4px; border-radius: 999px; background: var(--line); position: absolute; top: 7px; left: 50%; transform: translateX(-50%); }
@@ -431,7 +434,7 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 
 /* landscape phones: keep modals scrollable rather than overflowing */
 @media (max-height: 480px) and (max-width: 1024px) {
-  .sheet { max-height: calc(var(--vvh) - 8px - var(--kb)); border-radius: 14px 14px 0 0; }
+  .sheet { max-height: calc(var(--vvh) - 8px); border-radius: 14px 14px 0 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
