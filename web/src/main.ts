@@ -401,7 +401,7 @@ function toggleGroup(name: string, sec: HTMLElement, head: HTMLElement) {
 /**
  * Canonical "new artwork arrived" routine. The file picker, drag/drop, the
  * letter generator, and the first-run default all converge here so persistence,
- * firstMesh, showSvgInfo and build() stay consistent.
+ * showSvgInfo and build() stay consistent.
  *
  * `isDefault` marks the bundled sample: it is NOT persisted as user data (the
  * SVG blob is cleared so it is re-derived, never resurrected over something the
@@ -417,7 +417,9 @@ function loadSvgText(text: string, name: string, opts: { isDefault?: boolean } =
   // Persist real artwork like an upload; never store the placeholder sample.
   saveSvg(isDefaultArtwork ? null : svgText);
   persist();
-  firstMesh = true;
+  // Intentionally do NOT re-arm firstMesh here: swapping artwork keeps the same
+  // sphere, so the user's zoom/rotation stays valid and must be preserved. Only
+  // the first-ever build (firstMesh initialised true) frames the scene.
   build();
 }
 
