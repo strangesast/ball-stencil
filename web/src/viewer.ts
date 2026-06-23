@@ -181,8 +181,11 @@ export class Viewer {
   // camera — free trackball: `dir` points from the target to the eye, `up` is
   // the camera's up. Both are rotated about the current screen axes on drag, so
   // there is no pole/gimbal lock (full-circumference rotation about any axis).
-  private dir = norm([0.724, 0.495, 0.479]); // initial 3/4 view (old az≈0.6, el≈0.5)
-  private up = norm([-0.395, -0.27, 0.878]); // world +z tilted into the view plane
+  // Upright 3/4 view: the design's "up" is world +Y (the decal's pole is +z and
+  // the model matrix only ever rotates about Y, so +Y is the letter's top on
+  // every face). `up` therefore keeps a positive Y so letters read right-side-up.
+  private dir = norm([0.466, -0.565, 0.681]); // front-right-above, looking at the top cap
+  private up = norm([0.319, 0.825, 0.466]);   // letter top (+Y) points up on screen
   private dist = 320;
   // Pivot is locked to the ball centre (the world origin, where the ball, shell
   // and decal are all centred) so the ball stays centred in the viewport through
@@ -204,6 +207,9 @@ export class Viewer {
   private decalColor: [number, number, number] = [0.85, 0.16, 0.18];
   private dragging = false;
   private rafPaused = false;
+  // Active camera fly-to (set/changed artwork → swing it to face the viewer).
+  // null when idle; the render loop advances it, then the turntable resumes.
+  private anim: { sd: number[]; su: number[]; axis: number[]; angle: number; roll: number; t0: number; dur: number } | null = null;
 
   constructor(private canvas: HTMLCanvasElement) {
     const gl = canvas.getContext("webgl2", { antialias: true, alpha: false });
@@ -240,6 +246,7 @@ export class Viewer {
       prevCx = g.cx; prevCy = g.cy; prevDist = g.dist; prevAng = g.ang;
     };
     c.addEventListener("pointerdown", (e) => {
+      this.anim = null; // grabbing the ball cancels any in-flight fly-to
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       c.setPointerCapture(e.pointerId);
       if (pts.size === 1) {
@@ -288,9 +295,28 @@ export class Viewer {
     c.addEventListener("pointerup", end);
     c.addEventListener("pointercancel", end);
     c.addEventListener("contextmenu", (e) => e.preventDefault());
+    const ROT_WHEEL = 0.005; // radians per wheel pixel for trackpad orbit
+    // A wheel event is a *mouse wheel* (→ zoom, as before) when it's Firefox's
+    // line-mode delta, or a coarse vertical-only step (no deltaX, |deltaY|≥100).
+    // Otherwise it's a trackpad two-finger scroll (→ orbit). Pinch arrives as a
+    // wheel with ctrlKey set on every platform and always zooms. Touch devices
+    // never fire wheel (they use the pointer pinch/orbit path), so they're
+    // unaffected; drag-orbit stays as a universal fallback for every input.
+    const isMouseWheel = (e: WheelEvent) =>
+      e.deltaMode !== 0 ||
+      (e.deltaX === 0 && Math.abs(e.deltaY) >= 100 && Number.isInteger(e.deltaY));
     c.addEventListener("wheel", (e) => {
       e.preventDefault();
-      this.dist = Math.max(20, Math.min(2000, this.dist * Math.exp(e.deltaY * 0.001)));
+      this.anim = null; // scrolling/zooming cancels any in-flight fly-to
+      if (e.ctrlKey || isMouseWheel(e)) {
+        // pinch-zoom / mouse-wheel: dolly in and out
+        const k = e.ctrlKey ? 0.01 : 0.001; // pinch deltas are much smaller
+        this.dist = Math.max(20, Math.min(2000, this.dist * Math.exp(e.deltaY * k)));
+      } else {
+        // trackpad two-finger scroll: orbit (deltaX about screen-up, deltaY about
+        // screen-right) — the same gesture native macOS/Windows 3D viewers use.
+        this.orbit(-e.deltaX * ROT_WHEEL, -e.deltaY * ROT_WHEEL);
+      }
     }, { passive: false });
   }
 
@@ -349,6 +375,51 @@ export class Viewer {
     if (this.spinAxis === "x") return [1, 0, 0];
     if (this.spinAxis === "y") return [0, 1, 0];
     return [0, 0, 1];
+  }
+
+  /** World direction from the ball centre to the projected artwork, for the
+   *  current face. The decal is built with its pole at +z, then `modelMatrix`
+   *  rotates it onto Top(+z) / Front(+x) / Back(−x). */
+  private artworkNormal(): number[] {
+    if (this.projectionTarget === "front") return [1, 0, 0];
+    if (this.projectionTarget === "back") return [-1, 0, 0];
+    return [0, 0, 1];
+  }
+
+  /** Shortest-arc axis to rotate `from` onto `to`. For the antipodal case
+   *  (cross ≈ 0) any axis ⟂ the view works, so fall back to the camera up. */
+  private rotAxis(from: number[], to: number[], angle: number): number[] {
+    if (angle < 1e-6) return [0, 0, 1];
+    if (Math.PI - angle < 1e-3) return norm(this.basis().up);
+    return norm(cross(from, to));
+  }
+
+  /** Smoothly swing the camera so the projected artwork faces the viewer,
+   *  centred AND upright, then let the turntable spin resume if it's enabled.
+   *  Called when artwork is set or changed. The view direction rotates onto the
+   *  face along the shortest arc; the up vector is then rolled to world +Y (the
+   *  design's top on every face) so letters always read right-side-up. */
+  focusOnArtwork(durationMs = 650) {
+    const to = this.artworkNormal();
+    const from = this.dir;
+    const angle = Math.acos(Math.max(-1, Math.min(1, dot(from, to))));
+    const axis = this.rotAxis(from, to, angle);
+    // Desired upright up: world +Y made orthogonal to the new view direction.
+    const upArc = norm(rotateVec(this.up, axis, angle)); // up carried along the arc
+    let upT = [0 - to[0] * to[1], 1 - to[1] * to[1], 0 - to[2] * to[1]]; // +Y ⟂ `to`
+    upT = norm(upT);
+    // Signed roll about `to` that takes the carried up onto the upright up.
+    const c = Math.max(-1, Math.min(1, dot(upArc, upT)));
+    const roll = Math.atan2(dot(cross(upArc, upT), to), c);
+    // Honour reduced-motion, a zero duration, or an already-aligned ball: snap.
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce || durationMs <= 0 || (angle < 1e-3 && Math.abs(roll) < 1e-3)) {
+      this.dir = to.slice();
+      this.up = upT;
+      this.anim = null;
+      return;
+    }
+    this.anim = { sd: from.slice(), su: this.up.slice(), axis, angle, roll, t0: performance.now(), dur: durationMs };
   }
 
   /** Load the equirectangular albedo for the textured ball (one-time GPU upload). */
@@ -440,8 +511,24 @@ export class Viewer {
     gl.viewport(0, 0, w, h);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    // Turntable spin about the configured world axis; free trackball drag still works.
-    if (this.autoRotate && !this.dragging) {
+    // Camera fly-to: swing the projected artwork to face the viewer (centred),
+    // then hand control back to the turntable. Runs only when artwork is set or
+    // changed. Eases in/out and carries the up vector so roll is preserved.
+    if (this.anim) {
+      const e = Math.min(1, (performance.now() - this.anim.t0) / this.anim.dur);
+      const k = e * e * (3 - 2 * e); // smoothstep
+      const d = norm(rotateVec(this.anim.sd, this.anim.axis, this.anim.angle * k));
+      // Swing the view onto the face, then roll the up vector to upright (+Y).
+      let u = norm(rotateVec(this.anim.su, this.anim.axis, this.anim.angle * k));
+      u = norm(rotateVec(u, d, this.anim.roll * k));
+      this.dir = d;
+      this.up = u;
+      if (e >= 1) this.anim = null;
+    }
+
+    // Turntable spin about the configured world axis; free trackball drag still
+    // works. Suppressed during a fly-to so the two don't fight.
+    if (this.autoRotate && !this.dragging && !this.anim) {
       const ax = this.spinAxisVec();
       this.dir = norm(rotateVec(this.dir, ax, 0.0045));
       this.up = norm(rotateVec(this.up, ax, 0.0045));

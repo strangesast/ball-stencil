@@ -44,37 +44,53 @@
     <section id="panel-artwork" class="sheet" role="dialog" aria-modal="false" aria-label="Artwork" hidden>
       <div class="sheet-head"><span class="grip" aria-hidden="true"></span><h2>Artwork</h2><button class="sheet-close" type="button" aria-label="Close">×</button></div>
       <div class="sheet-body">
-        <div class="letter-gen">
-          <label for="letter">Generate from a letter</label>
-          <div class="letter-row">
-            <input type="text" id="letter" maxlength="4" inputmode="text" autocapitalize="characters"
-                   autocomplete="off" spellcheck="false" placeholder="e.g. B" aria-describedby="letter-help letter-err" />
-            <input type="color" id="letter-color" value="#d92a2e" aria-label="Letter colour" title="Letter colour" />
-            <button id="letter-go" class="primary" type="button">Generate</button>
-          </div>
-          <div id="letter-help" class="hint">A character or short word (≤ 4) → a filled stencil.</div>
-          <div id="letter-err" class="err" role="alert" hidden></div>
+        <!-- top toggle: choose the artwork source (a typed letter vs an image file) -->
+        <div class="seg art-toggle" role="radiogroup" aria-label="Artwork source">
+          <input type="radio" name="artsrc" id="artsrc-text" value="text" checked />
+          <label for="artsrc-text">Text<small>type a letter</small></label>
+          <input type="radio" name="artsrc" id="artsrc-image" value="image" />
+          <label for="artsrc-image">Image<small>SVG or photo</small></label>
         </div>
-        <div class="or-divider"><span>or</span></div>
-        <div id="drop" class="drop">
-          <input type="file" id="file"
-                 accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp,image/bmp,image/gif" hidden />
-          <button id="pick" class="primary" type="button">Choose file…</button>
-          <span class="hint">SVG or image (PNG, JPG, WebP, BMP, GIF) — or drag &amp; drop anywhere</span>
-          <div id="svginfo" class="svginfo"></div>
-          <!-- image-trace options: only consulted when the chosen file is a raster -->
-          <div class="trace-gen">
-            <fieldset id="trace-backend" class="seg">
-              <legend>Image trace</legend>
-              <input type="radio" name="tracebk" id="tracebk-potrace" value="potrace" checked />
-              <label for="tracebk-potrace">Potrace<small>clean</small></label>
-              <input type="radio" name="tracebk" id="tracebk-color" value="color" />
-              <label for="tracebk-color">Color<small>photos</small></label>
-            </fieldset>
-            <label class="trace-thresh">Threshold
-              <input type="range" id="trace-threshold" min="0" max="255" value="128" />
-            </label>
-            <div id="trace-err" class="err" role="alert" hidden></div>
+
+        <!-- TEXT pane -->
+        <div id="art-text" class="art-pane">
+          <div class="letter-gen">
+            <label for="letter">Generate from a letter</label>
+            <div class="letter-row">
+              <input type="text" id="letter" maxlength="10" inputmode="text" autocapitalize="characters"
+                     autocomplete="off" spellcheck="false" placeholder="e.g. B" aria-describedby="letter-help letter-err" />
+              <input type="color" id="letter-color" value="#d92a2e" aria-label="Letter colour" title="Letter colour" />
+              <button id="letter-go" class="primary" type="button">Generate</button>
+            </div>
+            <div id="letter-help" class="hint">A character or short word (≤ 10) → a filled stencil.</div>
+            <div id="letter-err" class="err" role="alert" hidden></div>
+          </div>
+        </div>
+
+        <!-- IMAGE pane -->
+        <div id="art-image" class="art-pane" hidden>
+          <div id="drop" class="drop">
+            <input type="file" id="file"
+                   accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp,image/bmp,image/gif" hidden />
+            <button id="pick" class="primary" type="button">Choose file…</button>
+            <span class="hint">SVG or image (PNG, JPG, WebP, BMP, GIF) — or drag &amp; drop anywhere</span>
+            <!-- the last configured image (raster thumbnail or chosen SVG) -->
+            <div id="image-preview" class="image-preview" hidden></div>
+            <div id="svginfo" class="svginfo"></div>
+            <!-- image-trace options: shown ONLY while a raster is the active artwork -->
+            <div id="trace-gen" class="trace-gen" hidden>
+              <fieldset id="trace-backend" class="seg">
+                <legend>Image trace</legend>
+                <input type="radio" name="tracebk" id="tracebk-potrace" value="potrace" checked />
+                <label for="tracebk-potrace">Potrace<small>clean</small></label>
+                <input type="radio" name="tracebk" id="tracebk-color" value="color" />
+                <label for="tracebk-color">Color<small>photos</small></label>
+              </fieldset>
+              <label class="trace-thresh">Threshold
+                <input type="range" id="trace-threshold" min="0" max="255" value="128" />
+              </label>
+              <div id="trace-err" class="err" role="alert" hidden></div>
+            </div>
           </div>
         </div>
       </div>

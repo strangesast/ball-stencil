@@ -9,7 +9,7 @@ import { UI_DEFAULT_PARAMS, Params, validateParams, ballRadius } from "./pipelin
 import { uvSphereTextured } from "./pipeline/exportmesh";
 import { Viewer } from "./viewer";
 import { Sheets } from "./ui/sheet";
-import { loadState, saveMeta, saveSvg, RenderMode, ProjectionTarget, SpinAxis, TraceBackend } from "./persist";
+import { loadState, saveMeta, saveSvg, RenderMode, ProjectionTarget, SpinAxis, TraceBackend, ArtworkSource } from "./persist";
 import { DEFAULT_PAINT_HEX, hexToRgb } from "./color";
 import { initPwa } from "./pwa";
 import type { MeshReport } from "./pipeline/meshcheck";
@@ -76,6 +76,12 @@ let lastLetter: string | null = null;
 // from the persisted meta; written back on change.
 let traceBackend: TraceBackend = restored?.traceBackend ?? "potrace";
 let traceThreshold: number = restored?.traceThreshold ?? 128;
+// Which input the Artwork dialog shows: a typed letter ("text") or an image
+// file ("image"). Auto-switches when new artwork arrives; user-toggleable; the
+// trace options + image preview within the image pane react to the active file.
+let artworkSource: ArtworkSource = restored?.artworkSource ?? "text";
+// Object URL backing the image-preview thumbnail; revoked before each refresh.
+let previewUrl: string | null = null;
 let jobId = 0;
 
 // Accepted raster formats — ONE source of truth for the picker accept, the
@@ -121,7 +127,20 @@ function persist() {
     letterColor,
     traceBackend,
     traceThreshold,
+    artworkSource,
   });
+}
+
+// The five launcher panels, by their data-panel id (also used as the URL hash).
+const PANELS = ["artwork", "params", "report", "downloads", "view"] as const;
+
+/** Reflect the open panel in the URL via replaceState — a hash only, so it
+ *  never adds a back/forward entry and never hits the server, yet survives a
+ *  refresh or dev autoreload. Empty hash when every panel is closed. */
+function syncUrl(name: string | null) {
+  const base = location.pathname + location.search;
+  const next = name ? `${base}#${name}` : base;
+  if (next !== base + location.hash) history.replaceState(history.state, "", next);
 }
 
 // -- worker messaging -------------------------------------------------------
@@ -413,7 +432,7 @@ function toggleGroup(name: string, sec: HTMLElement, head: HTMLElement) {
  * user intentionally cleared), and the info area / download name reflect that it
  * is a sample rather than the user's own artwork.
  */
-function loadSvgText(text: string, name: string, opts: { isDefault?: boolean } = {}) {
+function loadSvgText(text: string, name: string, opts: { isDefault?: boolean; recenter?: boolean } = {}) {
   svgText = text;
   svgName = name || "stencil";
   isDefaultArtwork = !!opts.isDefault;
@@ -426,6 +445,11 @@ function loadSvgText(text: string, name: string, opts: { isDefault?: boolean } =
   // sphere, so the user's zoom/rotation stays valid and must be preserved. Only
   // the first-ever build (firstMesh initialised true) frames the scene.
   build();
+  // Swing the camera to show the new artwork face-on, then resume the turntable.
+  // Skipped for the auto-seeded sample (it keeps the designed 3/4 intro view)
+  // and for live recolours (same artwork — see recolorCurrentLetter).
+  if (opts.recenter !== false) viewer.focusOnArtwork();
+  refreshArtworkUi(); // refresh the preview/trace options for the new artwork
 }
 
 function loadFile(file: File) {
@@ -447,8 +471,10 @@ function selectFile(file: File) {
   setTraceError(null);
   const isSvg = /\.svg$/i.test(file.name) || file.type === "image/svg+xml";
   const isRaster = RASTER_RE.test(file.name) || (!/\.[a-z0-9]+$/i.test(file.name) && file.type.startsWith("image/"));
-  if (isSvg) loadFile(file);
-  else if (isRaster) traceFile(file);
+  // A picked/dropped file is image artwork — switch the dialog to the Image pane.
+  // (loadFile clears lastRasterFile; traceFile sets it — so source reflects which.)
+  if (isSvg) { loadFile(file); setArtworkSource("image"); }
+  else if (isRaster) { traceFile(file); setArtworkSource("image"); }
   else setTraceError(`Unsupported file “${file.name}”. Choose an SVG or an image (PNG, JPG, WebP, BMP, GIF).`);
 }
 
@@ -526,6 +552,51 @@ function showSvgInfo() {
   });
 }
 
+// -- artwork source toggle (Text vs Image) ----------------------------------
+/** Reflect the current source + active file in the Artwork dialog: swap the
+ *  Text/Image panes, refresh the image preview, and reveal the trace options
+ *  ONLY while a raster is the active artwork (never for an SVG or a letter). */
+function refreshArtworkUi() {
+  const text = artworkSource === "text";
+  ($("artsrc-text") as HTMLInputElement).checked = text;
+  ($("artsrc-image") as HTMLInputElement).checked = !text;
+  $("art-text").hidden = !text;
+  $("art-image").hidden = text;
+  // A re-pick is required to re-trace after reload (the raster file isn't
+  // persisted), so the options stay hidden until a raster is chosen this session.
+  $("trace-gen").hidden = lastRasterFile === null;
+  renderImagePreview();
+}
+
+/** Thumbnail of the last configured image: the original raster when one is
+ *  loaded this session, otherwise the chosen SVG. Hidden for letters / no image. */
+function renderImagePreview() {
+  const box = $("image-preview");
+  if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
+  let src: string | null = null;
+  if (lastRasterFile) {
+    previewUrl = URL.createObjectURL(lastRasterFile);
+    src = previewUrl;
+  } else if (svgText && lastLetter === null && !isDefaultArtwork) {
+    src = "data:image/svg+xml;utf8," + encodeURIComponent(svgText);
+  }
+  if (src) {
+    box.innerHTML = `<img alt="chosen artwork" src="${src}" />`;
+    box.hidden = false;
+  } else {
+    box.innerHTML = "";
+    box.hidden = true;
+  }
+}
+
+/** Switch the dialog's input source (also called when new artwork arrives so
+ *  the toggle follows what the user just did) and persist the choice. */
+function setArtworkSource(src: ArtworkSource) {
+  artworkSource = src;
+  refreshArtworkUi();
+  persist();
+}
+
 // -- letter generator -------------------------------------------------------
 /** Generate a stencil from the typed character(s). On failure, show an inline
  *  message and leave the current artwork untouched (no blank build). */
@@ -537,6 +608,7 @@ async function generateLetter(raw: string) {
     setLetterError(null);
     loadSvgText(text, name);
     lastLetter = raw; // remember it so the colour swatch can recolour it live
+    setArtworkSource("text"); // a typed letter is text artwork
   } catch (err) {
     setLetterError(err instanceof Error ? err.message : String(err));
   }
@@ -555,7 +627,7 @@ async function recolorCurrentLetter() {
   try {
     const { glyphToSvg } = await import("./glyph");
     const { svgText: text, name } = await glyphToSvg(lastLetter, { fill: letterColor });
-    loadSvgText(text, name, { isDefault: wasDefault });
+    loadSvgText(text, name, { isDefault: wasDefault, recenter: false });
   } catch {
     /* leave the current artwork untouched on a transient load failure */
   }
@@ -603,6 +675,11 @@ function init() {
     const f = (e.target as HTMLInputElement).files?.[0];
     if (f) selectFile(f);
   });
+
+  // artwork source toggle (Text vs Image): swaps the two input panes
+  ($("artsrc-text") as HTMLInputElement).addEventListener("change", () => setArtworkSource("text"));
+  ($("artsrc-image") as HTMLInputElement).addEventListener("change", () => setArtworkSource("image"));
+  refreshArtworkUi(); // reflect the restored source + any restored artwork
   const dropHi = (on: boolean) => document.body.classList.toggle("dropping", on);
   ["dragenter", "dragover"].forEach((ev) => document.addEventListener(ev, (e) => { e.preventDefault(); dropHi(true); }));
   ["dragleave", "drop"].forEach((ev) => document.addEventListener(ev, (e) => { e.preventDefault(); dropHi(false); }));
@@ -682,6 +759,7 @@ function init() {
   projSel.addEventListener("change", () => {
     projectionTarget = projSel.value as ProjectionTarget;
     viewer.projectionTarget = projectionTarget;
+    viewer.focusOnArtwork(); // swing to the newly-chosen face
     refreshViewOverlay();
     persist();
   });
@@ -727,8 +805,8 @@ function init() {
   });
   letterColorInput.addEventListener("change", () => { void recolorCurrentLetter(); });
 
-  // persist which panel is open
-  sheets.onChange(() => persist());
+  // persist which panel is open — both to localStorage and the URL hash
+  sheets.onChange((name) => { persist(); syncUrl(name); });
 
   // mobile keyboard / toolbar handling
   window.visualViewport?.addEventListener("resize", syncViewport);
@@ -751,7 +829,7 @@ function init() {
       try {
         const { svgText: text, name } = await glyphToSvg(DEFAULT_LETTER, { fill: letterColor });
         if (userArtworkLoaded) return; // user supplied artwork while we loaded
-        loadSvgText(text, name, { isDefault: true });
+        loadSvgText(text, name, { isDefault: true, recenter: false });
         lastLetter = DEFAULT_LETTER; // the sample is a letter too — recolourable
       } catch (err) {
         if (userArtworkLoaded) return;
@@ -759,7 +837,14 @@ function init() {
       }
     });
   }
-  if (restored?.openPanel) sheets.open(restored.openPanel, { silent: true });
+  // Restore the open panel: the URL hash wins (shareable / survives autoreload),
+  // falling back to the last panel saved in localStorage. Keep the URL in sync.
+  const hashPanel = location.hash.replace(/^#/, "");
+  const initialPanel = (PANELS as readonly string[]).includes(hashPanel)
+    ? hashPanel
+    : restored?.openPanel ?? null;
+  if (initialPanel) sheets.open(initialPanel, { silent: true });
+  syncUrl(initialPanel);
 
   initPwa();
 }

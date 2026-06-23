@@ -28,6 +28,8 @@ export type RenderMode = "projection" | "stencil";
 export type ProjectionTarget = "top" | "front" | "back";
 export type SpinAxis = "z" | "x" | "y";
 export type TraceBackend = "potrace" | "color";
+/** Which artwork input the dialog shows: a typed letter or an image file. */
+export type ArtworkSource = "text" | "image";
 
 export interface PersistMeta {
   params: Params;
@@ -46,6 +48,8 @@ export interface PersistMeta {
   traceBackend: TraceBackend;
   /** Raster-trace bilevel threshold (0–255). */
   traceThreshold: number;
+  /** Which artwork input the dialog shows (a typed letter vs an image file). */
+  artworkSource: ArtworkSource;
 }
 export interface RestoredState extends PersistMeta {
   svgText: string | null;
@@ -110,6 +114,7 @@ export function loadState(): RestoredState | null {
         typeof o.traceThreshold === "number" && Number.isFinite(o.traceThreshold)
           ? Math.min(255, Math.max(0, Math.round(o.traceThreshold)))
           : 128,
+      artworkSource: o.artworkSource === "image" ? "image" : "text",
     };
   } catch {
     return null; // corrupt JSON → defaults

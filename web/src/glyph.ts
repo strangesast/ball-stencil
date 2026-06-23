@@ -53,7 +53,7 @@ export interface GlyphSvg {
 }
 
 /** Max characters accepted; longer strings map too small on the cap to trace. */
-export const MAX_GLYPH_CHARS = 4;
+export const MAX_GLYPH_CHARS = 10;
 
 function glyphName(text: string): string {
   const s = text.trim().replace(/\s+/g, "_").replace(/[^A-Za-z0-9_-]/g, "");

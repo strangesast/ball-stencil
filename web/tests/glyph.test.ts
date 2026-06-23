@@ -85,10 +85,10 @@ describe("buildGlyphSvg → parseSvg", () => {
   });
 
   it("rejects an over-long string", () => {
-    expect(() => buildGlyphSvg(font, "ABCDE")).toThrow(/at most/);
+    expect(() => buildGlyphSvg(font, "A".repeat(MAX_GLYPH_CHARS + 1))).toThrow(/at most/);
     // exactly MAX is allowed
-    expect(() => buildGlyphSvg(font, "ABCD")).not.toThrow();
-    expect(MAX_GLYPH_CHARS).toBe(4);
+    expect(() => buildGlyphSvg(font, "A".repeat(MAX_GLYPH_CHARS))).not.toThrow();
+    expect(MAX_GLYPH_CHARS).toBe(10);
   });
 
   it("sanitizes the download name", () => {
