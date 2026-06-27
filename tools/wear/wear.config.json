@@ -1,0 +1,18 @@
+{
+  "_comment": "Parameters for the tileable ball-wear distortion stack. Calibrated from the recovered original ball_optx.jpg (dimple_freq from the measured pebble grain ~11px; ink/panel colors sampled from the worn Wilson panel).",
+  "tile": 256,
+  "dimple_freq": 0.09375,
+  "dimple_octaves": 2,
+  "seed": 7,
+  "ink": "#3b321c",
+  "panel_top": "#dcb42c",
+  "panel_bottom": "#a98a20",
+  "wear_table": "1 1 0.9 0.4 0.05",
+  "displace_scale": 6,
+  "edge_blur": 0.35,
+  "light_azimuth": 235,
+  "light_elevation": 55,
+  "highlight_opacity": 0.55,
+  "font_size": 86,
+  "words": ["Wumbo", "Wilson", "AVP"]
+}

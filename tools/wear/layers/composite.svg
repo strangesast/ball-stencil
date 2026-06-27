@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="300" viewBox="0 0 360 300"><defs>
+  <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#dcb42c"/>
+    <stop offset="1" stop-color="#a98a20"/>
+  </linearGradient>
+
+  <!-- LAYER: dimples (grayscale pebble relief), tileable -->
+  <filter id="dimples" x="0" y="0" width="100%" height="100%" color-interpolation-filters="linearRGB">
+    <feTurbulence type="fractalNoise" baseFrequency="0.09375" numOctaves="2" seed="7" stitchTiles="stitch" result="n"/>
+    <feColorMatrix in="n" type="matrix"
+      values="0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0 0 0 0 1"/>
+  </filter>
+  <pattern id="dimplesTile" width="256" height="256" patternUnits="userSpaceOnUse">
+    <rect width="256" height="256" filter="url(#dimples)"/>
+  </pattern>
+
+  <!-- LAYER: erosion (worn-through ink speckle), tileable -->
+  <filter id="erosion" x="0" y="0" width="100%" height="100%" color-interpolation-filters="linearRGB">
+    <feTurbulence type="fractalNoise" baseFrequency="0.09375" numOctaves="2" seed="7" stitchTiles="stitch" result="n"/>
+    <feColorMatrix in="n" type="luminanceToAlpha" result="L"/>
+    <feComponentTransfer in="L" result="m"><feFuncA type="discrete" tableValues="0 0 0 1 1"/></feComponentTransfer>
+    <feFlood flood-color="#3b321c" result="ink"/>
+    <feComposite in="ink" in2="m" operator="in"/>
+  </filter>
+
+  <!-- LAYER: highlights (dimple specular from the SAME noise), tileable -->
+  <filter id="highlights" x="0" y="0" width="100%" height="100%" color-interpolation-filters="linearRGB">
+    <feTurbulence type="fractalNoise" baseFrequency="0.09375" numOctaves="2" seed="7" stitchTiles="stitch" result="n"/>
+    <feSpecularLighting in="n" surfaceScale="2.5" specularConstant="1.0"
+        specularExponent="16" lighting-color="#ffffff" result="s">
+      <feDistantLight azimuth="235" elevation="55"/>
+    </feSpecularLighting>
+  </filter>
+
+  <!-- LAYER: wear (full stack applied to glyphs) -->
+  <filter id="wear" x="-15%" y="-15%" width="130%" height="130%" color-interpolation-filters="linearRGB">
+    <feTurbulence type="fractalNoise" baseFrequency="0.09375" numOctaves="2" seed="7" stitchTiles="stitch" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="6"
+        xChannelSelector="R" yChannelSelector="G" result="disp"/>
+    <feColorMatrix in="n" type="luminanceToAlpha" result="L"/>
+    <feComponentTransfer in="L" result="wmask"><feFuncA type="table" tableValues="1 1 0.9 0.4 0.05"/></feComponentTransfer>
+    <feComposite in="disp" in2="wmask" operator="in" result="worn"/>
+    <feGaussianBlur in="worn" stdDeviation="0.35"/>
+  </filter></defs><rect width="360" height="300" fill="url(#panel)"/><text x="180" y="178" text-anchor="middle" textLength="312" lengthAdjust="spacingAndGlyphs" font-family="DejaVu Sans, Verdana, sans-serif" font-size="86" font-weight="900" font-style="italic" fill="#3b321c" filter="url(#wear)">Wumbo</text><rect width="360" height="300" filter="url(#highlights)" style="mix-blend-mode:screen;opacity:0.55"/></svg>
