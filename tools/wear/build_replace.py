@@ -59,6 +59,42 @@ def bbox_of(mask: np.ndarray, xlo: int, xhi: int):
     return xlo + xs.min(), ys.min(), xlo + xs.max() + 1, ys.max() + 1
 
 
+def fal_lama(ball_img: Image.Image, mask_img: Image.Image):
+    """Step 2 via fal-ai/lama (high-quality erase). Returns float RGB or None.
+    Key comes from $FAL_KEY (never stored in the repo). Falls back to the local
+    fill on any error (e.g. the host is blocked by the egress policy)."""
+    import base64
+    import json
+    import ssl
+    import urllib.request
+
+    key = os.environ.get("FAL_KEY")
+    if not key:
+        return None
+
+    def uri(im, fmt, mt):
+        b = io.BytesIO()
+        im.save(b, fmt)
+        return f"data:{mt};base64," + base64.b64encode(b.getvalue()).decode()
+
+    payload = {"image_url": uri(ball_img.convert("RGB"), "JPEG", "image/jpeg"),
+               "mask_url": uri(mask_img.convert("L"), "PNG", "image/png")}
+    ca = "/root/.ccr/ca-bundle.crt"
+    ctx = ssl.create_default_context(cafile=ca) if os.path.exists(ca) else None
+    try:
+        req = urllib.request.Request("https://fal.run/fal-ai/lama",
+                                     data=json.dumps(payload).encode(),
+                                     headers={"Authorization": f"Key {key}",
+                                              "Content-Type": "application/json"})
+        url = json.loads(urllib.request.urlopen(req, context=ctx, timeout=180).read())["image"]["url"]
+        data = urllib.request.urlopen(url, context=ctx, timeout=180).read()
+        print("  step 2: fal-ai/lama OK")
+        return np.asarray(Image.open(io.BytesIO(data)).convert("RGB")).astype(np.float32)
+    except Exception as e:  # noqa: BLE001 - any failure -> local fallback
+        print(f"  step 2: fal unavailable ({type(e).__name__}); using local fill")
+        return None
+
+
 def _blur(a: np.ndarray, sigma: float) -> np.ndarray:
     return np.asarray(Image.fromarray(np.clip(a, 0, 255).astype(np.uint8))
                       .filter(ImageFilter.GaussianBlur(sigma))).astype(np.float32)
@@ -113,8 +149,8 @@ def main() -> None:
     x0, y0, x1, y1 = bbox_of(mask, 880, 1220)
     Image.fromarray((mask[y0:y1, x0:x1] * 255).astype(np.uint8)).save(OUT / "step1_mask.png")
 
-    # ---- Step 2: clean non-ink background (inpaint), dimples reinjected in the hole ----
-    base = inpaint(ball, mask)
+    # ---- Step 2: clean non-ink background ----
+    # Prefer fal-ai/lama (preserves real dimples); fall back to local fill offline.
     luma = ball @ [.299, .587, .114]
     patch = luma[480:760, 1300:1580]
     relief_patch = patch - patch.mean()                       # real dimple relief, zero-mean
@@ -124,9 +160,13 @@ def main() -> None:
         for xx in range(x0, x1, pw):
             s = relief_patch[:min(ph, y1 - yy), :min(pw, x1 - xx)]
             relief[yy:yy + s.shape[0], xx:xx + s.shape[1]] = s
-    mfeather = np.asarray(Image.fromarray((mask * 255).astype(np.uint8))
-                          .filter(ImageFilter.GaussianBlur(2))).astype(np.float32) / 255.0
-    base += (relief * mfeather)[..., None]                    # restore dimples only in the hole
+
+    base = fal_lama(recover_original(), Image.open(MASK))
+    if base is None:
+        base = inpaint(ball, mask)                            # local: normalized convolution
+        mfeather = np.asarray(Image.fromarray((mask * 255).astype(np.uint8))
+                              .filter(ImageFilter.GaussianBlur(2))).astype(np.float32) / 255.0
+        base += (relief * mfeather)[..., None]                # restore dimples only in the hole
     base = np.clip(base, 0, 255)
     Image.fromarray(base.astype(np.uint8)[y0 - 20:y1 + 20, x0 - 20:x1 + 20]).save(OUT / "step2_background.png")
 
