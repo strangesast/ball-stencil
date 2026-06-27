@@ -10,6 +10,21 @@ thresholding inside hand-picked regions of interest to build a binary mask that
 isolates only the "Wilson" lettering (the cursive wordmark in three places where
 the equirectangular panel wraps, plus the small "WILSON.COM/PATENTS" fine print).
 
+Tiling / the seam
+-----------------
+The texture is an equirectangular (cylindrical) unwrap of the ball, so it is
+*horizontally periodic*: column 0 and column 2048 are the same meridian. The ball
+carries the wordmark twice on opposite faces, which in the unwrap puts the second
+logo exactly half a width (1024 px) from the center one -- straddling the x=0/2048
+seam. A naive fixed left-box + right-box misses ragged halves of it and its
+dilation can't cross the wrap.
+
+We handle this by exploiting the periodicity directly: the same logo detector is
+run once in the normal frame (center logo) and once on a frame rolled by W/2
+(which makes the split seam-logo whole and centered), then the second mask is
+rolled back and unioned. The final dilation pads horizontally with ``mode="wrap"``
+so it is continuous across the seam.
+
 The resulting mask follows the LaMa convention (https://advimman.github.io/lama-project/):
 
     white (255) = pixels to inpaint / remove
@@ -40,14 +55,14 @@ REPO = HERE.parent.parent
 # The commit that scrubbed "Wilson" -> "Wumbo"; its parent holds the original.
 ORIGINAL_REF = "94e5d01^:web/public/ball_optx.jpg"
 
-# Regions of interest (original 2048x1024 coords) that contain ONLY the "Wilson"
-# wordmark -- deliberately excluding "AVP GAME BALL", the "avp" runner, and FIVB.
-ROIS = [
-    ("center",   962, 318, 1100, 690),  # main cursive wordmark + (R)
-    ("left",       0, 330,  112, 692),  # wrap of the wordmark off the left seam
-    ("right",   1995, 318, 2048, 605),  # wrap of the wordmark off the right seam
-    ("patents",  500, 876,  690, 936),  # "WILSON.COM/PATENTS" fine print
-]
+# A single ROI (original 2048x1024 coords) that tightly bounds ONE cursive
+# "Wilson" wordmark -- deliberately excluding "AVP GAME BALL" (ends ~x970), the
+# "avp" runner, FIVB, and the panel seam stitch (x>1100). The SAME box bounds the
+# center logo in the normal frame and the seam logo once the frame is rolled by
+# W/2 (the two logos sit half a width apart), so it is reused for both.
+LOGO_ROI = (976, 318, 1100, 692)
+# "WILSON.COM/PATENTS" fine print -- a single (non-periodic) occurrence.
+PATENTS_ROI = (500, 876, 690, 936)
 INK_THRESHOLD = 110  # luminance below this is dark ink on the bright yellow ball
 DILATE = 7           # MaxFilter kernel; grows the mask for inpainting margin
 
@@ -65,16 +80,37 @@ def load_original() -> Image.Image:
     return Image.open(BytesIO(data)).convert("RGB")
 
 
-def build_mask(im: Image.Image) -> Image.Image:
-    arr = np.asarray(im).astype(np.int32)
+def _ink_in_rois(arr: np.ndarray, rois) -> np.ndarray:
+    """Mark dark ink (< threshold) inside each ROI of an RGB array frame."""
     lum = 0.299 * arr[..., 0] + 0.587 * arr[..., 1] + 0.114 * arr[..., 2]
     h, w = lum.shape
-    mask = np.zeros((h, w), dtype=np.uint8)
-    for name, l, t, r, b in ROIS:
+    m = np.zeros((h, w), dtype=np.uint8)
+    for name, l, t, r, b in rois:
         sel = lum[t:b, l:r] < INK_THRESHOLD
-        mask[t:b, l:r][sel] = 255
-        print(f"  {name:8s}: {int(sel.sum()):6d} ink px in {r - l}x{b - t} ROI")
-    return Image.fromarray(mask, "L").filter(ImageFilter.MaxFilter(DILATE))
+        m[t:b, l:r][sel] = 255
+        print(f"  {name:14s}: {int(sel.sum()):6d} ink px in {r - l}x{b - t} ROI")
+    return m
+
+
+def _wrap_dilate(mask: np.ndarray, k: int) -> np.ndarray:
+    """MaxFilter dilation that is continuous across the horizontal seam."""
+    padded = np.pad(mask, ((k, k), (k, k)), mode="wrap")
+    grown = np.asarray(Image.fromarray(padded, "L").filter(ImageFilter.MaxFilter(k)))
+    return grown[k:-k, k:-k]
+
+
+def build_mask(im: Image.Image) -> Image.Image:
+    arr = np.asarray(im).astype(np.int32)
+    w = arr.shape[1]
+    roll = w // 2  # half a width: brings the seam-straddling 2nd logo to center
+
+    # center logo (+ patents) in the normal frame
+    mask = _ink_in_rois(arr, [("center logo", *LOGO_ROI), ("patents", *PATENTS_ROI)])
+    # seam logo: detect in a rolled frame where it is whole, then roll mask back
+    seam = _ink_in_rois(np.roll(arr, roll, axis=1), [("seam logo", *LOGO_ROI)])
+    mask = np.maximum(mask, np.roll(seam, -roll, axis=1))
+
+    return Image.fromarray(_wrap_dilate(mask, DILATE), "L")
 
 
 def overlay(im: Image.Image, mask: Image.Image) -> Image.Image:

@@ -19,22 +19,56 @@ git show 94e5d01^:web/public/ball_optx.jpg > ball_optx_original.jpg
 `make_wilson_mask.py` reads that original directly from history — the trademarked
 photo is **not** re-committed to the repo.
 
+## Tiling: the texture is horizontally periodic
+
+`ball_optx.jpg` is an **equirectangular (cylindrical) unwrap** of the ball, so it
+wraps horizontally — column `0` and column `2048` are the same meridian. The ball
+carries the wordmark **twice**, on opposite faces ("the ball looks the same on two
+sides"), which in the unwrap places the two logos exactly **half a width (1024 px)
+apart**. One logo lands in the center; the other straddles the `x=0 / x=2048`
+seam, so it shows up as a ragged half on the far left *and* a ragged half on the
+far right.
+
+A naive "left box + right box" handles that badly: each box clips part of the
+glyphs, and a normal dilation can't grow across the wrap, so strokes near the seam
+stay uncovered. The fix exploits the periodicity:
+
+1. Detect the **center** logo in the normal frame.
+2. `np.roll(img, 1024)` to bring the seam logo whole into the center, detect it
+   with the **same** ROI, then `np.roll` the result back.
+3. Union the two, and dilate with `np.pad(..., mode="wrap")` so growth is
+   continuous across the seam.
+
+Because the two logos are identical, the same `LOGO_ROI` bounds both — the script
+confirms this (center and seam logos report near-identical ink-pixel counts).
+
+### Other approaches to the same problem
+
+- **Wrap-mode morphology only** — keep separate left/right boxes but pad with
+  `mode="wrap"` before dilation. Fixes seam-crossing dilation but not clipped
+  detection; weaker than rolling.
+- **Periodic replication** — detect the center logo once and paste a copy shifted
+  by `±1024 px (mod width)`. Cheapest, but assumes the period is exactly 1024 and
+  the offset is pixel-perfect; rolling re-detects on real pixels and is robust to
+  small offsets.
+- **Tile horizontally (`np.tile` / 3×-wide canvas)**, mask the middle copy, crop
+  back — equivalent to rolling, just more memory.
+- **Operate on the sphere** — unproject to the ball surface, mask there, reproject.
+  Most correct in principle but far more machinery than this 2-logo case needs.
+
 ## What the mask covers
 
-The wordmark appears in four places (the panel wraps across the left/right image
-seam in the equirectangular projection):
-
-| Region    | Original coords (x0,y0,x1,y1) | Content                       |
-| --------- | ----------------------------- | ----------------------------- |
-| `center`  | 962, 318, 1100, 690           | main cursive wordmark + ®      |
-| `left`    | 0, 330, 112, 692              | wordmark wrapping off left seam|
-| `right`   | 1995, 318, 2048, 605          | wordmark wrapping off right seam|
-| `patents` | 500, 876, 690, 936            | "WILSON.COM/PATENTS" fine print|
+| Region       | Frame              | Original coords (x0,y0,x1,y1) | Content                         |
+| ------------ | ------------------ | ----------------------------- | ------------------------------- |
+| center logo  | normal             | 976, 318, 1100, 692           | cursive wordmark + ®            |
+| seam logo    | rolled by 1024     | 976, 318, 1100, 692           | the 2nd wordmark, split L/R     |
+| patents      | normal             | 500, 876, 690, 936            | "WILSON.COM/PATENTS" fine print |
 
 Within each region the script thresholds the dark ink (luminance `< 110`) on the
 bright-yellow ball, then dilates slightly. This follows the actual glyphs rather
-than a crude box, and deliberately **excludes** "AVP GAME BALL", the "avp"
-runner logo, and "FIVB".
+than a crude box, and deliberately **excludes** "AVP GAME BALL" (ends ~x970), the
+"avp" runner logo, the panel seam stitch (x>1100), and "FIVB". The fine print is a
+single (non-periodic) occurrence — the other face shows "FIVB™" there instead.
 
 ## Mask convention
 
